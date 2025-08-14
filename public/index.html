@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini Discord - ScyllaDB Chat</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #2c2f33;
+            color: #ffffff;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: #36393f;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            color: #7289da;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .form-section {
+            background-color: #2c2f33;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        label {
+            min-width: 100px;
+            font-weight: bold;
+            color: #b9bbbe;
+        }
+        
+        input, select, textarea {
+            padding: 8px;
+            border: 1px solid #4f545c;
+            border-radius: 4px;
+            background-color: #40444b;
+            color: #ffffff;
+            font-size: 14px;
+        }
+        
+        input[type="text"] {
+            flex: 1;
+            min-width: 200px;
+        }
+        
+        textarea {
+            flex: 1;
+            min-height: 60px;
+            resize: vertical;
+        }
+        
+        select {
+            min-width: 120px;
+        }
+        
+        button {
+            background-color: #7289da;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        button:hover {
+            background-color: #5b6eae;
+        }
+        
+        button:disabled {
+            background-color: #4f545c;
+            cursor: not-allowed;
+        }
+        
+        .messages-section {
+            background-color: #2c2f33;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        
+        .messages-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        
+        .pagination-controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .message {
+            background-color: #36393f;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            border-left: 4px solid #7289da;
+        }
+        
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .message-author {
+            font-weight: bold;
+            color: #7289da;
+        }
+        
+        .message-time {
+            font-size: 12px;
+            color: #72767d;
+        }
+        
+        .message-id {
+            font-size: 10px;
+            color: #4f545c;
+            font-family: monospace;
+        }
+        
+        .message-content {
+            line-height: 1.4;
+        }
+        
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .status.success {
+            background-color: #43b581;
+            color: white;
+        }
+        
+        .status.error {
+            background-color: #f04747;
+            color: white;
+        }
+        
+        .status.warning {
+            background-color: #faa61a;
+            color: white;
+        }
+        
+        .status.info {
+            background-color: #7289da;
+            color: white;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        @media (max-width: 600px) {
+            .form-row {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            label {
+                min-width: auto;
+            }
+            
+            .messages-header {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            
+            .pagination-controls {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Mini Discord - ScyllaDB Chat</h1>
+        
+        <!-- Message Form -->
+        <div class="form-section">
+            <h3>Send Message</h3>
+            <form id="messageForm">
+                <div class="form-row">
+                    <label for="channelId">Channel:</label>
+                    <input type="text" id="channelId" value="general" required>
+                    
+                    <label for="userId">User:</label>
+                    <input type="text" id="userId" value="gustavo" required>
+                </div>
+                
+                <div class="form-row">
+                    <label for="content">Message:</label>
+                    <textarea id="content" placeholder="Type your message here..." required></textarea>
+                </div>
+                
+                <div class="form-row">
+                    <label for="writeConsistency">Write Consistency:</label>
+                    <select id="writeConsistency">
+                        <option value="ONE">ONE (Fast)</option>
+                        <option value="QUORUM">QUORUM (Balanced)</option>
+                        <option value="ALL">ALL (Strong)</option>
+                        <option value="LOCAL_ONE">LOCAL_ONE</option>
+                        <option value="LOCAL_QUORUM">LOCAL_QUORUM</option>
+                    </select>
+                    
+                    <label for="clientMsgId">Client Msg ID:</label>
+                    <input type="text" id="clientMsgId" placeholder="Optional dedup ID">
+                </div>
+                
+                <div class="form-row">
+                    <button type="submit" id="sendBtn">Send Message</button>
+                </div>
+            </form>
+        </div>
+        
+        <!-- Status Messages -->
+        <div id="statusContainer"></div>
+        
+        <!-- Messages Display -->
+        <div class="messages-section">
+            <div class="messages-header">
+                <h3>Messages</h3>
+                <div class="pagination-controls">
+                    <label for="readConsistency">Read Consistency:</label>
+                    <select id="readConsistency">
+                        <option value="ONE">ONE (Fast)</option>
+                        <option value="QUORUM">QUORUM (Balanced)</option>
+                        <option value="ALL">ALL (Strong)</option>
+                        <option value="LOCAL_ONE">LOCAL_ONE</option>
+                        <option value="LOCAL_QUORUM">LOCAL_QUORUM</option>
+                    </select>
+                    <button id="loadLatestBtn">Load Latest</button>
+                    <button id="loadOlderBtn" class="hidden">Load Older</button>
+                </div>
+            </div>
+            
+            <div id="messagesContainer">
+                <p style="text-align: center; color: #72767d;">Click "Load Latest" to fetch messages</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        let currentChannelId = 'general';
+        let nextBeforeCursor = null;
+        
+        // DOM elements
+        const messageForm = document.getElementById('messageForm');
+        const channelIdInput = document.getElementById('channelId');
+        const userIdInput = document.getElementById('userId');
+        const contentInput = document.getElementById('content');
+        const writeConsistencySelect = document.getElementById('writeConsistency');
+        const readConsistencySelect = document.getElementById('readConsistency');
+        const clientMsgIdInput = document.getElementById('clientMsgId');
+        const sendBtn = document.getElementById('sendBtn');
+        const loadLatestBtn = document.getElementById('loadLatestBtn');
+        const loadOlderBtn = document.getElementById('loadOlderBtn');
+        const messagesContainer = document.getElementById('messagesContainer');
+        const statusContainer = document.getElementById('statusContainer');
+        
+        // Status message helper
+        function showStatus(message, type = 'info', duration = 5000) {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            
+            statusContainer.appendChild(statusDiv);
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    if (statusDiv.parentNode) {
+                        statusDiv.parentNode.removeChild(statusDiv);
+                    }
+                }, duration);
+            }
+        }
+        
+        // Format timestamp
+        function formatTimestamp(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleString();
+        }
+        
+        // Render messages
+        function renderMessages(messages, append = false) {
+            if (!append) {
+                messagesContainer.innerHTML = '';
+            }
+            
+            if (messages.length === 0 && !append) {
+                messagesContainer.innerHTML = '<p style="text-align: center; color: #72767d;">No messages found</p>';
+                return;
+            }
+            
+            messages.forEach(message => {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = 'message';
+                messageDiv.innerHTML = `
+                    <div class="message-header">
+                        <span class="message-author">${escapeHtml(message.user_id)}</span>
+                        <span class="message-time">${formatTimestamp(message.created_at)}</span>
+                    </div>
+                    <div class="message-content">${escapeHtml(message.content)}</div>
+                    <div class="message-id">ID: ${message.message_id}</div>
+                `;
+                
+                if (append) {
+                    messagesContainer.appendChild(messageDiv);
+                } else {
+                    messagesContainer.insertBefore(messageDiv, messagesContainer.firstChild);
+                }
+            });
+        }
+        
+        // HTML escape helper
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        // Send message
+        async function sendMessage(event) {
+            event.preventDefault();
+            
+            const channelId = channelIdInput.value.trim();
+            const userId = userIdInput.value.trim();
+            const content = contentInput.value.trim();
+            const consistency = writeConsistencySelect.value;
+            const clientMsgId = clientMsgIdInput.value.trim();
+            
+            if (!channelId || !userId || !content) {
+                showStatus('Please fill in all required fields', 'error');
+                return;
+            }
+            
+            sendBtn.disabled = true;
+            sendBtn.textContent = 'Sending...';
+            
+            try {
+                const payload = {
+                    channel_id: channelId,
+                    user_id: userId,
+                    content: content,
+                    consistency: consistency
+                };
+                
+                if (clientMsgId) {
+                    payload.client_msg_id = clientMsgId;
+                }
+                
+                const response = await fetch(`${API_BASE}/api/messages`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const result = await response.json();
+                
+                if (result.ok) {
+                    if (result.deduped) {
+                        showStatus('Message was deduplicated (already exists)', 'warning');
+                    } else {
+                        showStatus('Message sent successfully!', 'success');
+                        contentInput.value = '';
+                        clientMsgIdInput.value = '';
+                        
+                        // Auto-refresh if viewing same channel
+                        if (channelId === currentChannelId) {
+                            await loadMessages(false);
+                        }
+                    }
+                    
+                    if (result.warning) {
+                        showStatus(`Warning: ${result.warning}`, 'warning');
+                    }
+                } else {
+                    showStatus(`Error: ${result.error.message}`, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Error sending message:', error);
+                showStatus('Failed to send message', 'error');
+            } finally {
+                sendBtn.disabled = false;
+                sendBtn.textContent = 'Send Message';
+            }
+        }
+        
+        // Load messages
+        async function loadMessages(loadOlder = false) {
+            const channelId = channelIdInput.value.trim() || 'general';
+            const consistency = readConsistencySelect.value;
+            
+            currentChannelId = channelId;
+            
+            const btn = loadOlder ? loadOlderBtn : loadLatestBtn;
+            btn.disabled = true;
+            btn.textContent = loadOlder ? 'Loading...' : 'Loading...';
+            
+            try {
+                let url = `${API_BASE}/api/channels/${encodeURIComponent(channelId)}/messages?consistency=${consistency}&limit=20`;
+                
+                if (loadOlder && nextBeforeCursor) {
+                    url += `&before=${encodeURIComponent(nextBeforeCursor)}`;
+                }
+                
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                if (result.ok) {
+                    renderMessages(result.items, loadOlder);
+                    
+                    nextBeforeCursor = result.page.next_before;
+                    loadOlderBtn.classList.toggle('hidden', !nextBeforeCursor || result.items.length === 0);
+                    
+                    if (result.warning) {
+                        showStatus(`Warning: ${result.warning}`, 'warning');
+                    }
+                    
+                    showStatus(`Loaded ${result.items.length} messages`, 'info', 2000);
+                } else {
+                    showStatus(`Error: ${result.error.message}`, 'error');
+                }
+                
+            } catch (error) {
+                console.error('Error loading messages:', error);
+                showStatus('Failed to load messages', 'error');
+            } finally {
+                btn.disabled = false;
+                btn.textContent = loadOlder ? 'Load Older' : 'Load Latest';
+            }
+        }
+        
+        // Event listeners
+        messageForm.addEventListener('submit', sendMessage);
+        loadLatestBtn.addEventListener('click', () => loadMessages(false));
+        loadOlderBtn.addEventListener('click', () => loadMessages(true));
+        
+        // Channel change handler
+        channelIdInput.addEventListener('change', () => {
+            nextBeforeCursor = null;
+            loadOlderBtn.classList.add('hidden');
+            messagesContainer.innerHTML = '<p style="text-align: center; color: #72767d;">Click "Load Latest" to fetch messages</p>';
+        });
+        
+        // Auto-focus content input
+        contentInput.focus();
+        
+        // Generate random client_msg_id button (for testing)
+        function generateRandomId() {
+            clientMsgIdInput.value = 'test_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        // Add generate button
+        const generateBtn = document.createElement('button');
+        generateBtn.type = 'button';
+        generateBtn.textContent = 'Generate ID';
+        generateBtn.onclick = generateRandomId;
+        clientMsgIdInput.parentNode.insertBefore(generateBtn, clientMsgIdInput.nextSibling);
+    </script>
+</body>
+</html>

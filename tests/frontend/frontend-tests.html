@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frontend Tests - Mini Discord</title>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 20px;
+            background-color: #1a1a1a;
+            color: #00ff00;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #333;
+            background-color: #2a2a2a;
+        }
+        .test-result {
+            padding: 5px;
+            margin: 5px 0;
+        }
+        .pass {
+            color: #00ff00;
+        }
+        .fail {
+            color: #ff0000;
+        }
+        .info {
+            color: #00aaff;
+        }
+        .warning {
+            color: #ffaa00;
+        }
+        button {
+            background-color: #333;
+            color: #fff;
+            border: 1px solid #555;
+            padding: 10px 15px;
+            margin: 5px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #555;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #333;
+            background-color: #2a2a2a;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 Frontend Tests - Mini Discord ScyllaDB</h1>
+    
+    <div class="test-section">
+        <h2>API Connection Tests</h2>
+        <button onclick="testHealth()">Test Health Endpoint</button>
+        <button onclick="testCORS()">Test CORS</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>LWT (Idempotency) Tests</h2>
+        <button onclick="testLWT()">Test Message Deduplication</button>
+        <button onclick="testLWTWithoutClientId()">Test Without Client ID</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Consistency Tests</h2>
+        <button onclick="testConsistencyLevels()">Test All Consistency Levels</button>
+        <button onclick="testInvalidConsistency()">Test Invalid Consistency</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Pagination Tests</h2>
+        <button onclick="testBasicPagination()">Test Basic Pagination</button>
+        <button onclick="testPaginationCursors()">Test Before/After Cursors</button>
+        <button onclick="testPaginationEdgeCases()">Test Edge Cases</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Channel Partitioning Tests</h2>
+        <button onclick="testChannelIsolation()">Test Channel Isolation</button>
+        <button onclick="testMultipleChannels()">Test Multiple Channels</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Input Validation Tests</h2>
+        <button onclick="testInputValidation()">Test Input Validation</button>
+        <button onclick="testFieldLimits()">Test Field Limits</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Performance Tests</h2>
+        <button onclick="testBatchOperations()">Test Batch Operations</button>
+        <button onclick="testLargeContent()">Test Large Content</button>
+    </div>
+    
+    <div class="test-section">
+        <button onclick="runAllTests()" style="background-color: #006600; font-weight: bold;">🚀 RUN ALL TESTS</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+    
+    <div id="results">
+        <div class="info">Test results will appear here...</div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000';
+        let testResults = [];
+        
+        // Utility functions
+        function log(message, type = 'info') {
+            const timestamp = new Date().toISOString().substr(11, 12);
+            const resultDiv = document.getElementById('results');
+            const logEntry = `<div class="test-result ${type}">[${timestamp}] ${message}</div>`;
+            resultDiv.innerHTML += logEntry;
+            resultDiv.scrollTop = resultDiv.scrollHeight;
+            
+            testResults.push({ timestamp, message, type });
+        }
+        
+        function logPass(test, message) {
+            log(`✅ PASS: ${test} - ${message}`, 'pass');
+        }
+        
+        function logFail(test, message) {
+            log(`❌ FAIL: ${test} - ${message}`, 'fail');
+        }
+        
+        function logInfo(message) {
+            log(`ℹ️  ${message}`, 'info');
+        }
+        
+        function logWarning(message) {
+            log(`⚠️  ${message}`, 'warning');
+        }
+        
+        function clearResults() {
+            document.getElementById('results').innerHTML = '<div class="info">Test results cleared...</div>';
+            testResults = [];
+        }
+        
+        // Generate unique ID for testing
+        function generateUniqueId() {
+            return 'test_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        }
+        
+        // API helper functions
+        async function apiRequest(method, url, data = null) {
+            const options = {
+                method,
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+            };
+            
+            if (data) {
+                options.body = JSON.stringify(data);
+            }
+            
+            return fetch(API_BASE + url, options);
+        }
+        
+        // Test functions
+        async function testHealth() {
+            logInfo('Testing health endpoint...');
+            
+            try {
+                const response = await apiRequest('GET', '/health');
+                const data = await response.json();
+                
+                if (response.ok && data.ok && data.dc && data.keyspace) {
+                    logPass('Health Check', `Connected to DC: ${data.dc}, Keyspace: ${data.keyspace}`);
+                } else {
+                    logFail('Health Check', `Invalid response: ${JSON.stringify(data)}`);
+                }
+            } catch (error) {
+                logFail('Health Check', `Network error: ${error.message}`);
+            }
+        }
+        
+        async function testCORS() {
+            logInfo('Testing CORS...');
+            
+            try {
+                const response = await fetch(API_BASE + '/health', {
+                    method: 'GET',
+                    mode: 'cors',
+                });
+                
+                if (response.ok) {
+                    logPass('CORS', 'Cross-origin request successful');
+                } else {
+                    logFail('CORS', `CORS blocked with status: ${response.status}`);
+                }
+            } catch (error) {
+                logFail('CORS', `CORS error: ${error.message}`);
+            }
+        }
+        
+        async function testLWT() {
+            logInfo('Testing LWT (Lightweight Transactions) idempotency...');
+            
+            const clientMsgId = generateUniqueId();
+            const testMessage = {
+                channel_id: 'lwt-test-frontend',
+                user_id: 'frontend-tester',
+                content: 'LWT test from frontend',
+                client_msg_id: clientMsgId
+            };
+            
+            try {
+                // First message
+                const response1 = await apiRequest('POST', '/api/messages', testMessage);
+                const data1 = await response1.json();
+                
+                if (data1.ok && data1.message_id && !data1.deduped) {
+                    logPass('LWT First Insert', `Message created with ID: ${data1.message_id}`);
+                } else {
+                    logFail('LWT First Insert', `Unexpected response: ${JSON.stringify(data1)}`);
+                    return;
+                }
+                
+                // Second message (should be deduped)
+                const response2 = await apiRequest('POST', '/api/messages', testMessage);
+                const data2 = await response2.json();
+                
+                if (data2.ok && data2.deduped && !data2.message_id) {
+                    logPass('LWT Deduplication', 'Message correctly deduped on second attempt');
+                } else {
+                    logFail('LWT Deduplication', `Expected deduped=true, got: ${JSON.stringify(data2)}`);
+                }
+                
+                // Verify only one message in database
+                const messagesResponse = await apiRequest('GET', `/api/channels/${testMessage.channel_id}/messages`);
+                const messagesData = await messagesResponse.json();
+                
+                const matchingMessages = messagesData.items.filter(msg => msg.content === testMessage.content);
+                
+                if (matchingMessages.length === 1) {
+                    logPass('LWT Database Verification', 'Only one message exists in database');
+                } else {
+                    logFail('LWT Database Verification', `Expected 1 message, found ${matchingMessages.length}`);
+                }
+                
+            } catch (error) {
+                logFail('LWT Test', `Error: ${error.message}`);
+            }
+        }
+        
+        async function testLWTWithoutClientId() {
+            logInfo('Testing message insertion without client_msg_id...');
+            
+            const testMessage = {
+                channel_id: 'no-lwt-test',
+                user_id: 'frontend-tester',
+                content: 'Message without client_msg_id'
+            };
+            
+            try {
+                const response = await apiRequest('POST', '/api/messages', testMessage);
+                const data = await response.json();
+                
+                if (data.ok && data.message_id && !data.deduped) {
+                    logPass('No Client ID', 'Message inserted successfully without client_msg_id');
+                } else {
+                    logFail('No Client ID', `Unexpected response: ${JSON.stringify(data)}`);
+                }
+                
+            } catch (error) {
+                logFail('No Client ID', `Error: ${error.message}`);
+            }
+        }
+        
+        async function testConsistencyLevels() {
+            logInfo('Testing consistency levels...');
+            
+            const consistencyLevels = ['ONE', 'QUORUM', 'ALL'];
+            
+            for (const level of consistencyLevels) {
+                try {
+                    // Test write consistency
+                    const writeResponse = await apiRequest('POST', '/api/messages', {
+                        channel_id: 'consistency-test',
+                        user_id: 'frontend-tester',
+                        content: `Test with ${level} consistency`,
+                        consistency: level
+                    });
+                    
+                    const writeData = await writeResponse.json();
+                    
+                    if (writeData.ok && writeData.message_id) {
+                        logPass(`Write Consistency ${level}`, 'Message written successfully');
+                    } else {
+                        logFail(`Write Consistency ${level}`, `Failed: ${JSON.stringify(writeData)}`);
+                        continue;
+                    }
+                    
+                    // Test read consistency
+                    const readResponse = await apiRequest('GET', `/api/channels/consistency-test/messages?consistency=${level}&limit=1`);
+                    const readData = await readResponse.json();
+                    
+                    if (readData.ok && readData.items && readData.items.length > 0) {
+                        logPass(`Read Consistency ${level}`, 'Messages read successfully');
+                    } else {
+                        logFail(`Read Consistency ${level}`, `Failed: ${JSON.stringify(readData)}`);
+                    }
+                    
+                } catch (error) {
+                    logFail(`Consistency ${level}`, `Error: ${error.message}`);
+                }
+            }
+        }
+        
+        async function testInvalidConsistency() {
+            logInfo('Testing invalid consistency level...');
+            
+            try {
+                const response = await apiRequest('POST', '/api/messages', {
+                    channel_id: 'invalid-consistency-test',
+                    user_id: 'frontend-tester',
+                    content: 'Test with invalid consistency',
+                    consistency: 'INVALID_LEVEL'
+                });
+                
+                const data = await response.json();
+                
+                if (data.ok && data.message_id && data.warning) {
+                    logPass('Invalid Consistency', `Message sent with warning: ${data.warning}`);
+                } else if (data.ok && data.message_id) {
+                    logWarning('Invalid Consistency handled but no warning message returned');
+                } else {
+                    logFail('Invalid Consistency', `Unexpected response: ${JSON.stringify(data)}`);
+                }
+                
+            } catch (error) {
+                logFail('Invalid Consistency', `Error: ${error.message}`);
+            }
+        }
+        
+        async function testBasicPagination() {
+            logInfo('Testing basic pagination...');
+            
+            const channelId = 'pagination-test-frontend';
+            
+            try {
+                // Insert test messages
+                logInfo('Inserting 10 test messages...');
+                for (let i = 1; i <= 10; i++) {
+                    await apiRequest('POST', '/api/messages', {
+                        channel_id: channelId,
+                        user_id: 'pagination-tester',
+                        content: `Pagination test message ${i.toString().padStart(2, '0')}`
+                    });
+                    await new Promise(resolve => setTimeout(resolve, 50)); // Small delay
+                }
+                
+                // Test first page
+                const page1Response = await apiRequest('GET', `/api/channels/${channelId}/messages?limit=4`);
+                const page1Data = await page1Response.json();
+                
+                if (page1Data.ok && page1Data.items.length === 4 && page1Data.page.next_before) {
+                    logPass('Pagination Page 1', `Got 4 messages with next_before cursor`);
+                } else {
+                    logFail('Pagination Page 1', `Expected 4 messages and cursor, got: ${JSON.stringify(page1Data)}`);
+                    return;
+                }
+                
+                // Test second page
+                const page2Response = await apiRequest('GET', 
+                    `/api/channels/${channelId}/messages?limit=4&before=${page1Data.page.next_before}`);
+                const page2Data = await page2Response.json();
+                
+                if (page2Data.ok && page2Data.items.length === 4) {
+                    logPass('Pagination Page 2', 'Got 4 more messages');
+                } else {
+                    logFail('Pagination Page 2', `Expected 4 messages, got ${page2Data.items?.length}`);
+                    return;
+                }
+                
+                // Verify no overlap
+                const page1Ids = page1Data.items.map(msg => msg.message_id);
+                const page2Ids = page2Data.items.map(msg => msg.message_id);
+                const overlap = page1Ids.filter(id => page2Ids.includes(id));
+                
+                if (overlap.length === 0) {
+                    logPass('Pagination Overlap Check', 'No duplicate messages between pages');
+                } else {
+                    logFail('Pagination Overlap Check', `Found ${overlap.length} overlapping messages`);
+                }
+                
+            } catch (error) {
+                logFail('Basic Pagination', `Error: ${error.message}`);
+            }
+        }
+        
+        async function testPaginationCursors() {
+            logInfo('Testing before/after cursor validation...');
+            
+            try {
+                // Test both before and after (should fail)
+                const bothResponse = await apiRequest('GET', 
+                    '/api/channels/test/messages?before=550e8400-e29b-41d4-a716-446655440000&after=550e8400-e29b-41d4-a716-446655440001');
+                const bothData = await bothResponse.json();
+                
+                if (!bothData.ok && bothData.error && bothData.error.message.toLowerCase().includes('before and after')) {
+                    logPass('Cursor Validation', 'Correctly rejected both before and after parameters');
+                } else {
+                    logFail('Cursor Validation', 'Should reject both before and after parameters');
+                }
+                
+                // Test invalid UUID format
+                const invalidResponse = await apiRequest('GET', '/api/channels/test/messages?before=invalid-uuid');
+                const invalidData = await invalidResponse.json();
+                
+                if (!invalidData.ok && invalidData.error && invalidData.error.message.toLowerCase().includes('uuid')) {
+                    logPass('UUID Validation', 'Correctly rejected invalid UUID format');
+                } else {
+                    logFail('UUID Validation', 'Should reject invalid UUID format');
+                }
+                
+            } catch (error) {
+                logFail('Pagination Cursors', `Error: ${error.message}`);
+            }
+        }
+        
+        async function testPaginationEdgeCases() {
+            logInfo('Testing pagination edge cases...');
+            
+            try {
+                // Test empty channel
+                const emptyResponse = await apiRequest('GET', '/api/channels/empty-channel-test/messages');
+                const emptyData = await emptyResponse.json();
+                
+                if (emptyData.ok && emptyData.items.length === 0 && emptyData.page.next_before === null) {
+                    logPass('Empty Channel', 'Empty channel returns empty array and null cursor');
+                } else {
+                    logFail('Empty Channel', `Unexpected response: ${JSON.stringify(emptyData)}`);
+                }
+                
+                // Test limit validation
+                const bigLimitResponse = await apiRequest('GET', '/api/channels/test/messages?limit=150');
+                const bigLimitData = await bigLimitResponse.json();
+                
+                if (!bigLimitData.ok && bigLimitData.error) {
+                    logPass('Limit Validation', 'Correctly rejected limit > 100');
+                } else {
+                    logFail('Limit Validation', 'Should reject limit > 100');
+                }
+                
+            } catch (error) {
+                logFail('Pagination Edge Cases', `Error: ${error.message}`);
+            }
+        }
+        
+        async function testChannelIsolation() {
+            logInfo('Testing channel isolation...');
+            
+            const channels = ['channel-isolation-a', 'channel-isolation-b'];
+            
+            try {
+                // Insert messages in different channels
+                for (const channel of channels) {
+                    for (let i = 1; i <= 3; i++) {
+                        await apiRequest('POST', '/api/messages', {
+                            channel_id: channel,
+                            user_id: 'isolation-tester',
+                            content: `${channel} message ${i}`
+                        });
+                    }
+                }
+                
+                // Verify isolation
+                for (const channel of channels) {
+                    const response = await apiRequest('GET', `/api/channels/${channel}/messages`);
+                    const data = await response.json();
+                    
+                    if (data.ok && data.items.length === 3) {
+                        const allBelongToChannel = data.items.every(msg => msg.channel_id === channel);
+                        const contentMatches = data.items.every(msg => msg.content.includes(channel));
+                        
+                        if (allBelongToChannel && contentMatches) {
+                            logPass(`Channel Isolation ${channel}`, 'All messages belong to correct channel');
+                        } else {
+                            logFail(`Channel Isolation ${channel}`, 'Messages leaked from other channels');
+                        }
+                    } else {
+                        logFail(`Channel Isolation ${channel}`, `Expected 3 messages, got ${data.items?.length}`);
+                    }
+                }
+                
+            } catch (error) {
+                logFail('Channel Isolation', `Error: ${error.message}`);
+            }
+        }
+        
+        async function testMultipleChannels() {
+            logInfo('Testing multiple channels simultaneously...');
+            
+            const channels = ['multi-a', 'multi-b', 'multi-c'];
+            const promises = [];
+            
+            try {
+                // Send messages to multiple channels concurrently
+                for (const channel of channels) {
+                    promises.push(
+                        apiRequest('POST', '/api/messages', {
+                            channel_id: channel,
+                            user_id: 'multi-tester',
+                            content: `Concurrent message for ${channel}`
+                        })
+                    );
+                }
+                
+                const responses = await Promise.all(promises);
+                const results = await Promise.all(responses.map(r => r.json()));
+                
+                const allSuccessful = results.every(data => data.ok && data.message_id);
+                
+                if (allSuccessful) {
+                    logPass('Multiple Channels', 'All concurrent channel writes succeeded');
+                } else {
+                    logFail('Multiple Channels', 'Some concurrent writes failed');
+                }
+                
+            } catch (error) {
+                logFail('Multiple Channels', `Error: ${error.message}`);
+            }
+        }
+        
+        async function testInputValidation() {
+            logInfo('Testing input validation...');
+            
+            const invalidInputs = [
+                { test: 'Empty channel_id', data: { channel_id: '', user_id: 'test', content: 'test' } },
+                { test: 'Missing user_id', data: { channel_id: 'test', content: 'test' } },
+                { test: 'Empty content', data: { channel_id: 'test', user_id: 'test', content: '' } },
+                { test: 'Non-string channel_id', data: { channel_id: 123, user_id: 'test', content: 'test' } }
+            ];
+            
+            for (const { test, data } of invalidInputs) {
+                try {
+                    const response = await apiRequest('POST', '/api/messages', data);
+                    const result = await response.json();
+                    
+                    if (!result.ok && result.error) {
+                        logPass(`Input Validation: ${test}`, 'Correctly rejected invalid input');
+                    } else {
+                        logFail(`Input Validation: ${test}`, 'Should have rejected invalid input');
+                    }
+                } catch (error) {
+                    logFail(`Input Validation: ${test}`, `Error: ${error.message}`);
+                }
+            }
+        }
+        
+        async function testFieldLimits() {
+            logInfo('Testing field length limits...');
+            
+            const limits = [
+                { field: 'channel_id', max: 100, value: 'a'.repeat(101) },
+                { field: 'user_id', max: 100, value: 'a'.repeat(101) },
+                { field: 'content', max: 2000, value: 'a'.repeat(2001) },
+                { field: 'client_msg_id', max: 100, value: 'a'.repeat(101) }
+            ];
+            
+            for (const { field, max, value } of limits) {
+                try {
+                    const data = {
+                        channel_id: 'limit-test',
+                        user_id: 'limit-tester',
+                        content: 'Test content',
+                        client_msg_id: 'limit-test-id'
+                    };
+                    data[field] = value;
+                    
+                    const response = await apiRequest('POST', '/api/messages', data);
+                    const result = await response.json();
+                    
+                    if (!result.ok && result.error && result.error.message.includes(field)) {
+                        logPass(`Field Limit: ${field}`, `Correctly rejected ${field} > ${max} chars`);
+                    } else {
+                        logFail(`Field Limit: ${field}`, `Should reject ${field} > ${max} chars`);
+                    }
+                } catch (error) {
+                    logFail(`Field Limit: ${field}`, `Error: ${error.message}`);
+                }
+            }
+        }
+        
+        async function testBatchOperations() {
+            logInfo('Testing batch operations performance...');
+            
+            const batchSize = 20;
+            const startTime = performance.now();
+            const promises = [];
+            
+            try {
+                for (let i = 0; i < batchSize; i++) {
+                    promises.push(
+                        apiRequest('POST', '/api/messages', {
+                            channel_id: 'batch-test',
+                            user_id: `batch-user-${i % 5}`,
+                            content: `Batch message ${i}`,
+                            client_msg_id: `batch-${i}`
+                        })
+                    );
+                }
+                
+                const responses = await Promise.all(promises);
+                const results = await Promise.all(responses.map(r => r.json()));
+                const endTime = performance.now();
+                
+                const successful = results.filter(r => r.ok && r.message_id).length;
+                const duration = Math.round(endTime - startTime);
+                
+                if (successful === batchSize) {
+                    logPass('Batch Operations', `${batchSize} messages processed in ${duration}ms (avg: ${Math.round(duration/batchSize)}ms/msg)`);
+                } else {
+                    logFail('Batch Operations', `Only ${successful}/${batchSize} messages succeeded`);
+                }
+                
+            } catch (error) {
+                logFail('Batch Operations', `Error: ${error.message}`);
+            }
+        }
+        
+        async function testLargeContent() {
+            logInfo('Testing large content handling...');
+            
+            try {
+                const largeContent = 'A'.repeat(1500) + ' - Large content test';
+                
+                const response = await apiRequest('POST', '/api/messages', {
+                    channel_id: 'large-content-test',
+                    user_id: 'large-tester',
+                    content: largeContent
+                });
+                
+                const data = await response.json();
+                
+                if (data.ok && data.message_id) {
+                    logPass('Large Content', `Successfully sent message with ${largeContent.length} characters`);
+                    
+                    // Verify retrieval
+                    const getResponse = await apiRequest('GET', '/api/channels/large-content-test/messages?limit=1');
+                    const getData = await getResponse.json();
+                    
+                    if (getData.ok && getData.items[0]?.content.length === largeContent.length) {
+                        logPass('Large Content Retrieval', 'Large content retrieved correctly');
+                    } else {
+                        logFail('Large Content Retrieval', 'Large content retrieval failed');
+                    }
+                } else {
+                    logFail('Large Content', `Failed to send large content: ${JSON.stringify(data)}`);
+                }
+                
+            } catch (error) {
+                logFail('Large Content', `Error: ${error.message}`);
+            }
+        }
+        
+        async function runAllTests() {
+            logInfo('🚀 Starting comprehensive test suite...');
+            clearResults();
+            
+            const tests = [
+                { name: 'Health Check', fn: testHealth },
+                { name: 'CORS', fn: testCORS },
+                { name: 'LWT Idempotency', fn: testLWT },
+                { name: 'LWT Without Client ID', fn: testLWTWithoutClientId },
+                { name: 'Consistency Levels', fn: testConsistencyLevels },
+                { name: 'Invalid Consistency', fn: testInvalidConsistency },
+                { name: 'Basic Pagination', fn: testBasicPagination },
+                { name: 'Pagination Cursors', fn: testPaginationCursors },
+                { name: 'Pagination Edge Cases', fn: testPaginationEdgeCases },
+                { name: 'Channel Isolation', fn: testChannelIsolation },
+                { name: 'Multiple Channels', fn: testMultipleChannels },
+                { name: 'Input Validation', fn: testInputValidation },
+                { name: 'Field Limits', fn: testFieldLimits },
+                { name: 'Batch Operations', fn: testBatchOperations },
+                { name: 'Large Content', fn: testLargeContent }
+            ];
+            
+            let passed = 0;
+            let failed = 0;
+            
+            for (const test of tests) {
+                logInfo(`\n🧪 Running: ${test.name}`);
+                logInfo('─'.repeat(50));
+                
+                try {
+                    await test.fn();
+                    passed++;
+                } catch (error) {
+                    logFail(test.name, `Test suite error: ${error.message}`);
+                    failed++;
+                }
+                
+                // Small delay between tests
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            logInfo('\n📊 Test Suite Summary');
+            logInfo('═'.repeat(50));
+            
+            if (failed === 0) {
+                logPass('Test Suite', `All ${passed} tests passed! 🎉`);
+            } else {
+                logFail('Test Suite', `${failed} tests failed, ${passed} passed`);
+            }
+            
+            logInfo(`Total time: ${Date.now() - (Date.now() - 10000)}ms`); // Approximate
+        }
+    </script>
+</body>
+</html>

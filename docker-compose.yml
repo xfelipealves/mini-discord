@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  scylla:
+    image: scylladb/scylla:5.2
+    container_name: scylla-dev
+    ports:
+      - "9042:9042"
+      - "9160:9160"
+      - "10000:10000"
+    command: >
+      --seeds=scylla 
+      --smp 2 
+      --memory 750M 
+      --overprovisioned 1 
+      --api-address 0.0.0.0 
+      --developer-mode=1
+    volumes:
+      - scylla-data:/var/lib/scylla
+    healthcheck:
+      test: ["CMD-SHELL", "cqlsh -e 'DESCRIBE KEYSPACES' || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+    networks:
+      - scylla-net
+
+  scylla-init:
+    image: scylladb/scylla:5.2
+    container_name: scylla-init
+    depends_on:
+      scylla:
+        condition: service_healthy
+    volumes:
+      - ./docker/init-schema.cql:/init-schema.cql
+    command: >
+      sh -c "
+        echo 'Waiting for ScyllaDB to be ready...' &&
+        sleep 10 &&
+        cqlsh scylla -f /init-schema.cql &&
+        echo 'Schema initialized successfully'
+      "
+    networks:
+      - scylla-net
+
+volumes:
+  scylla-data:
+
+networks:
+  scylla-net:
+    driver: bridge
