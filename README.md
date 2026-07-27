@@ -1,304 +1,192 @@
-# Mini Discord - ScyllaDB Chat Application
+# Mini Discord
 
-A complete mini-chat web application to validate ScyllaDB concepts including:
-- ✅ Configurable consistency levels per operation (ONE, QUORUM, ALL)
-- ✅ LWT (Lightweight Transactions) for message idempotency via `client_msg_id`
-- ✅ TimeUUID-based pagination (before/after cursors)
-- ✅ Channel partitioning with temporal ordering
-- ✅ Docker Compose setup for dev (RF=1) and cluster (RF=3) modes
+Mini Discord is a small educational chat application for exploring ScyllaDB data-modeling and consistency concepts. It is not a production-ready Discord replacement or a general-purpose chat service.
+
+The repository contains:
+
+- A TypeScript/Express API backed by ScyllaDB through `cassandra-driver`.
+- A static HTML frontend that sends messages and loads channel history.
+- Docker Compose definitions for a single-node development database and a three-node local cluster.
+- Unit, API-backed integration, frontend, and shell-based concept tests.
+
+## What It Demonstrates
+
+- Channel-based partitioning with `channel_id` as the partition key.
+- TimeUUID clustering and newest-first message ordering.
+- `before` and `after` cursor queries for message history.
+- Configurable read and write consistency levels.
+- Lightweight transactions (LWT) with `client_msg_id` for duplicate prevention.
+- The difference between a local RF=1 schema and a three-node RF=3 schema.
+
+These examples are intentionally small so the ScyllaDB behavior is visible in the schema, API, and test scripts.
 
 ## Architecture
 
+```text
+Browser
+  public/index.html
+  - Static HTML, CSS, and JavaScript
+  - Sends messages and loads channel history
+  - Calls http://localhost:3000
+           |
+           | HTTP/JSON with CORS
+           v
+Express API
+  src/index.ts
+  - Input validation and structured error responses
+  - Consistency selection
+  - Message and health endpoints
+           |
+           | CQL on port 9042
+           v
+ScyllaDB
+  - chat.messages
+  - chat.message_dedupe
+  - RF=1 with SimpleStrategy in development mode
+  - RF=3 with NetworkTopologyStrategy in cluster mode
 ```
-┌──────────────────────────┐
-│        Front Web         │
-│  HTML + JS (fetch API)   │
-│  - Envio de mensagens    │
-│  - Lista com paginação   │
-│  - Seletor consistência  │
-│  - Campo client_msg_id   │
-└─────────────┬────────────┘
-              │ HTTP (REST, CORS)
-              v
-┌──────────────────────────┐
-│   API Backend (Node/TS)  │
-│  Express + cassandra-driver
-│  Endpoints:              │
-│   POST /api/messages     │
-│   GET  /api/channels/:id/messages
-│   GET  /health           │
-│  Conceitos:              │
-│   - Consistency por op   │
-│   - LWT idempotência     │
-│   - Paginação timeuuid   │
-└─────────────┬────────────┘
-              │ CQL (9042)
-              v
-┌──────────────────────────┐
-│       ScyllaDB (OSS)     │
-│ Keyspace: chat           │
-│ Tables:                  │
-│  - messages(...)         │
-│  - message_dedupe(...)   │
-│ Replication: RF=1 (dev)  │
-│ Variante: cluster RF=3   │
-└──────────────────────────┘
+
+The API does not serve the frontend. Run a separate static web server for `public/`. The browser client currently has the API URL hard-coded as `http://localhost:3000`.
+
+## Project Tree
+
+```text
+.
+├── src/
+│   ├── db.ts                         ScyllaDB connection and queries
+│   ├── index.ts                      Express app and API routes
+│   ├── types.ts                      API TypeScript types
+│   └── validators.ts                 Request and consistency validation
+├── public/index.html                 Static browser client
+├── docker/
+│   ├── init-schema.cql               Development schema, RF=1
+│   ├── init-schema-cluster.cql       Cluster schema, RF=3
+│   └── init-schema-test.cql           Test keyspace schema, RF=1
+├── docker-compose.yml                Single-node ScyllaDB setup
+├── docker-compose.cluster.yml        Three-node ScyllaDB setup
+├── scripts/
+│   ├── run-tests.sh                  Unit/integration test runner
+│   ├── setup-test-db.sh              Creates the test schema
+│   └── test-scylla-concepts.sh       LWT, consistency, pagination, and other checks
+├── tests/                             Jest and browser tests
+├── .env.example                      Example runtime configuration
+├── jest.config.js                    Jest configuration
+├── package.json                      Commands and dependencies
+└── TESTING.md                        Additional testing notes
 ```
 
 ## Prerequisites
 
-- **Docker & Docker Compose** (for ScyllaDB)
-- **Node.js 20+** (for API)
-- **Modern web browser** (for frontend)
+- Docker with Docker Compose support.
+- Node.js 20 or newer.
+- npm.
+- Python 3 if you want to serve the static frontend with the example command.
+- A modern browser.
 
-## Quick Start (Development Mode - RF=1)
+The Compose files use ScyllaDB `5.2` images and allocate a deliberately small local development footprint. Adjust Docker resources if the containers cannot start on your machine.
 
-### 1. Clone and Setup
+## Quick Start: Development Mode
+
+Development mode runs one ScyllaDB node with RF=1.
+
+### 1. Clone and install
 
 ```bash
-git clone <this-repo>
+git clone https://github.com/xfelipealves/mini-discord.git
 cd mini-discord
 cp .env.example .env
 npm install
 ```
 
-### 2. Start ScyllaDB (Development)
+### 2. Start ScyllaDB
 
 ```bash
-# Start ScyllaDB with RF=1 (single node)
-docker-compose up -d
-
-# Wait for initialization (check logs)
-docker-compose logs -f scylla-init
+docker compose up -d
+docker compose logs scylla-init
 ```
 
-Wait until you see `Schema initialized successfully` in the logs.
+Wait for `Schema initialized successfully` before starting the API. If your installation uses the legacy command, `docker-compose` can be used in place of `docker compose`.
 
-### 3. Start API Server
+### 3. Load configuration and start the API
+
+The application reads environment variables from `process.env`. It does not call `dotenv.config()` at startup, so load `.env` into the shell explicitly:
 
 ```bash
-# Terminal 1: Start API in development mode
+set -a
+. ./.env
+set +a
 npm run dev
 ```
 
-You should see:
-```
-Connecting to ScyllaDB at 127.0.0.1 (DC: datacenter1)
-Connected to ScyllaDB - DC: datacenter1, Keyspace: chat
-Prepared statements ready
-API server running on port 3000
-```
+The API listens on `http://localhost:3000` by default.
 
-### 4. Open Frontend
+### 4. Serve the frontend
 
-Open `public/index.html` in your browser, or serve it via a simple HTTP server:
+In a second terminal:
 
 ```bash
-# Terminal 2: Simple HTTP server
-cd public
-python3 -m http.server 8080
-# Then open http://localhost:8080
+python3 -m http.server 8080 --directory public
 ```
 
-### 5. Test Basic Functionality
+Open <http://localhost:8080>, choose a channel and user, send a message, and use **Load Latest** or **Load Older** to inspect the results.
 
-1. **Send a message**: Fill the form and click "Send Message"
-2. **Load messages**: Click "Load Latest" to see your message
-3. **Test pagination**: Send multiple messages, then use "Load Older"
-
-## Cluster Mode (RF=3)
-
-For testing consistency levels and fault tolerance:
-
-### 1. Stop Development Mode
+To stop the development database:
 
 ```bash
-docker-compose down
+docker compose down
 ```
 
-### 2. Start 3-Node Cluster
+## Cluster Mode
+
+Cluster mode starts three local ScyllaDB nodes and initializes `chat` with RF=3 using `NetworkTopologyStrategy` for `datacenter1`.
+
+Stop development mode first, then start the cluster:
 
 ```bash
-# Start cluster with 3 nodes
-docker-compose -f docker-compose.cluster.yml up -d
-
-# Wait for all nodes to be ready
-docker-compose -f docker-compose.cluster.yml logs -f scylla-cluster-init
+docker compose down
+docker compose -f docker-compose.cluster.yml up -d
+docker compose -f docker-compose.cluster.yml logs scylla-cluster-init
 ```
 
-Wait until you see `Cluster schema initialized successfully`.
+Wait for `Cluster schema initialized successfully`. The first node is available at `127.0.0.1:9042`; the other nodes are mapped to host ports `9043` and `9044`. The default `.env.example` contact point (`127.0.0.1`) connects the API through the first node.
 
-### 3. Update Environment
-
-Update `.env` to use cluster-aware settings if needed, then restart the API:
+Load the environment and start the API as in development mode:
 
 ```bash
+set -a
+. ./.env
+set +a
 npm run dev
 ```
 
-### 4. Test Consistency Levels
+Use cluster mode when experimenting with RF=3 and consistency behavior. The Compose setup is for local learning; it is not a production cluster configuration.
 
-Now you can test different consistency levels:
-- **ONE**: Fast writes/reads, may be inconsistent during node failures
-- **QUORUM**: Balanced approach, majority of nodes must agree
-- **ALL**: Strong consistency, all nodes must respond (may fail if a node is down)
-
-## Automated Testing
-
-### Unit and Integration Tests
+To stop the cluster:
 
 ```bash
-# Install test dependencies
-npm install
-
-# Run unit tests (no API required)
-npm test -- tests/unit/
-
-# Run integration tests (requires running API)
-# Terminal 1: Start services
-docker-compose up -d
-npm run dev
-
-# Terminal 2: Run integration tests
-npm test -- tests/integration/
-
-# Run all tests (if API is running)
-npm test
-
-# Quick test runner script
-./scripts/run-tests.sh
+docker compose -f docker-compose.cluster.yml down
 ```
 
-### ScyllaDB Concepts Test Script
+## API Summary
 
-```bash
-# Make sure API and ScyllaDB are running
-docker-compose up -d
-npm run dev
+### `POST /api/messages`
 
-# Run all concept tests
-./scripts/test-scylla-concepts.sh
+Creates a message. Required fields are `channel_id`, `user_id`, and `content`.
 
-# Run specific concept tests
-./scripts/test-scylla-concepts.sh lwt
-./scripts/test-scylla-concepts.sh consistency
-./scripts/test-scylla-concepts.sh pagination
-./scripts/test-scylla-concepts.sh partitioning
-./scripts/test-scylla-concepts.sh performance
-```
-
-### Frontend Tests
-
-Open `tests/frontend/frontend-tests.html` in your browser and click "🚀 RUN ALL TESTS" for comprehensive frontend validation.
-
-## Manual Testing Scenarios
-
-### 1. Idempotency (LWT) Test
-
-```bash
-# Test duplicate prevention
-curl -X POST http://localhost:3000/api/messages \
-  -H "Content-Type: application/json" \
-  -d '{
-    "channel_id": "test",
-    "user_id": "tester",
-    "content": "Hello World",
-    "client_msg_id": "unique-123"
-  }'
-
-# Send same request again - should return deduped:true
-curl -X POST http://localhost:3000/api/messages \
-  -H "Content-Type: application/json" \
-  -d '{
-    "channel_id": "test",
-    "user_id": "tester",
-    "content": "Hello World",
-    "client_msg_id": "unique-123"
-  }'
-```
-
-**Expected**: Second request returns `{"ok": true, "deduped": true}`
-
-### 2. Pagination Test
-
-```bash
-# Send multiple messages
-for i in {1..5}; do
-  curl -X POST http://localhost:3000/api/messages \
-    -H "Content-Type: application/json" \
-    -d "{\"channel_id\": \"test\", \"user_id\": \"user$i\", \"content\": \"Message $i\"}"
-  sleep 1
-done
-
-# Get latest 3 messages
-curl "http://localhost:3000/api/channels/test/messages?limit=3"
-
-# Use next_before cursor for pagination
-curl "http://localhost:3000/api/channels/test/messages?limit=3&before=<message_id_from_previous_response>"
-```
-
-**Expected**: 
-- First call returns 3 most recent messages
-- Second call returns 2 older messages (no overlap)
-
-### 3. Consistency Level Test (Cluster Mode Only)
-
-```bash
-# Write with ONE consistency
-curl -X POST http://localhost:3000/api/messages \
-  -H "Content-Type: application/json" \
-  -d '{
-    "channel_id": "test",
-    "user_id": "tester",
-    "content": "Consistency Test",
-    "consistency": "ONE"
-  }'
-
-# Read with QUORUM consistency immediately
-curl "http://localhost:3000/api/channels/test/messages?consistency=QUORUM&limit=1"
-
-# Simulate node failure
-docker stop scylla2
-
-# Try reading with ALL (should fail)
-curl "http://localhost:3000/api/channels/test/messages?consistency=ALL&limit=1"
-
-# Reading with ONE should still work
-curl "http://localhost:3000/api/channels/test/messages?consistency=ONE&limit=1"
-```
-
-### 4. Temporal Ordering Test
-
-```bash
-# Send messages rapidly
-curl -X POST http://localhost:3000/api/messages -H "Content-Type: application/json" -d '{"channel_id": "test", "user_id": "user1", "content": "First"}'
-curl -X POST http://localhost:3000/api/messages -H "Content-Type: application/json" -d '{"channel_id": "test", "user_id": "user2", "content": "Second"}'
-curl -X POST http://localhost:3000/api/messages -H "Content-Type: application/json" -d '{"channel_id": "test", "user_id": "user3", "content": "Third"}'
-
-# Verify ordering (should be Third, Second, First)
-curl "http://localhost:3000/api/channels/test/messages?limit=10"
-```
-
-**Expected**: Messages appear in reverse chronological order (newest first)
-
-## API Reference
-
-### POST /api/messages
-
-Create a new message with optional deduplication.
-
-**Request Body:**
 ```json
 {
-  "channel_id": "string (1-100 chars, required)",
-  "user_id": "string (1-100 chars, required)", 
-  "content": "string (1-2000 chars, required)",
-  "consistency": "ONE|QUORUM|ALL|... (optional)",
-  "client_msg_id": "string (1-100 chars, optional)"
+  "channel_id": "general",
+  "user_id": "alice",
+  "content": "Hello",
+  "consistency": "ONE",
+  "client_msg_id": "optional-dedup-key"
 }
 ```
 
-**Response:**
+Validation limits are 1-100 characters for `channel_id` and `user_id`, 1-2000 characters for `content`, and 1-100 characters for `client_msg_id`.
+
+A successful new message returns:
+
 ```json
 {
   "ok": true,
@@ -306,48 +194,25 @@ Create a new message with optional deduplication.
 }
 ```
 
-**Deduplication Response:**
-```json
-{
-  "ok": true,
-  "deduped": true
-}
-```
+Reusing the same `client_msg_id` within a channel returns `deduped: true` instead of inserting another message.
 
-### GET /api/channels/:channel_id/messages
+### `GET /api/channels/:channel_id/messages`
 
-Retrieve messages with pagination support.
+Returns messages for one channel, newest first.
 
-**Query Parameters:**
-- `limit`: Number of messages (1-100, default: 20)
-- `before`: TimeUUID cursor for older messages
-- `after`: TimeUUID cursor for newer messages  
-- `consistency`: Read consistency level (optional)
+Query parameters:
 
-**Response:**
-```json
-{
-  "ok": true,
-  "items": [
-    {
-      "channel_id": "string",
-      "message_id": "timeuuid", 
-      "user_id": "string",
-      "content": "string",
-      "created_at": "ISO timestamp"
-    }
-  ],
-  "page": {
-    "next_before": "timeuuid|null"
-  }
-}
-```
+- `limit`: 1-100, default `20`.
+- `before`: Return messages older than this TimeUUID.
+- `after`: Return messages newer than this TimeUUID.
+- `consistency`: Override the read consistency level.
 
-### GET /health
+`before` and `after` cannot be used together. The response includes `page.next_before` for older-page navigation.
 
-Check API and database connectivity.
+### `GET /health`
 
-**Response:**
+Returns the configured datacenter and keyspace after the API has connected to ScyllaDB:
+
 ```json
 {
   "ok": true,
@@ -356,149 +221,130 @@ Check API and database connectivity.
 }
 ```
 
-## Configuration
+Invalid requests return structured errors with HTTP 400 by default. `USE_SOFT_ERRORS=true` changes handled error responses to HTTP 200, while retaining `ok: false` in the response body.
 
-### Environment Variables (.env)
+## ScyllaDB Schema
 
-```bash
-SCYLLA_CONTACT_POINTS=127.0.0.1         # Comma-separated ScyllaDB nodes
-SCYLLA_DATACENTER=datacenter1            # Data center name
-SCYLLA_KEYSPACE=chat                     # Keyspace name
-API_PORT=3000                            # API server port
-DEFAULT_WRITE_CONSISTENCY=ONE            # Default write consistency
-DEFAULT_READ_CONSISTENCY=ONE             # Default read consistency
-REQUEST_BODY_LIMIT=1mb                   # Request body size limit
-CORS_ORIGIN=*                            # CORS origin (dev only)
-USE_SOFT_ERRORS=false                    # Always return HTTP 200 with error payload
-```
+The application uses the `chat` keyspace in both runtime modes:
 
-### Consistency Levels
-
-Supported consistency levels:
-- `ANY`, `ONE`, `TWO`, `THREE` - Number-based consistency
-- `QUORUM` - Majority of replicas
-- `ALL` - All replicas
-- `LOCAL_ONE`, `LOCAL_QUORUM` - Datacenter-local variants
-
-## Database Schema
-
-### Keyspace: chat
-
-**Development (RF=1):**
-```cql
-CREATE KEYSPACE chat 
-WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1};
-```
-
-**Cluster (RF=3):**
-```cql  
-CREATE KEYSPACE chat
-WITH replication = {'class': 'NetworkTopologyStrategy', 'datacenter1': 3};
-```
-
-### Table: messages
-
-```cql
+```sql
 CREATE TABLE messages (
-    channel_id text,         -- Partition key
-    message_id timeuuid,     -- Clustering key (DESC order)
+    channel_id text,
+    message_id timeuuid,
     user_id text,
     content text,
     created_at timestamp,
     PRIMARY KEY ((channel_id), message_id)
 ) WITH CLUSTERING ORDER BY (message_id DESC);
-```
 
-### Table: message_dedupe
-
-```cql
 CREATE TABLE message_dedupe (
-    channel_id text,         -- Partition key
-    client_msg_id text,      -- Clustering key
+    channel_id text,
+    client_msg_id text,
     PRIMARY KEY ((channel_id), client_msg_id)
 );
 ```
 
-## Troubleshooting
+`messages` keeps each channel in its own partition and orders rows by descending `message_id`. `message_dedupe` is written with `IF NOT EXISTS`, which is the LWT used by the API for idempotency.
 
-### Common Issues
+## Configuration
 
-1. **"Database not initialized"**
-   - Ensure ScyllaDB is running: `docker-compose ps`
-   - Check health: `curl http://localhost:3000/health`
-   - View logs: `docker-compose logs scylla`
-
-2. **"Connection timeout"**
-   - ScyllaDB may still be starting up (can take 1-2 minutes)
-   - Check if port 9042 is accessible: `telnet localhost 9042`
-
-3. **"Schema not found"**
-   - Verify init container ran: `docker-compose logs scylla-init`
-   - Manually run schema: `docker-compose exec scylla cqlsh -f /init-schema.cql`
-
-4. **Frontend not connecting to API**
-   - Check API is running on port 3000: `curl http://localhost:3000/health`
-   - Verify CORS_ORIGIN setting in `.env`
-   - Open browser dev tools to check for errors
-
-### Performance Tips
-
-1. **Batch Operations**: Group related operations when possible
-2. **Consistency Trade-offs**: Use ONE for speed, QUORUM for balance, ALL for critical data
-3. **Prepared Statements**: Already implemented for better performance
-4. **Connection Pooling**: Handled automatically by cassandra-driver
-
-## Limitations
-
-1. **Security**: No authentication/authorization (dev only)
-2. **Error Handling**: Basic error responses (can be enhanced)
-3. **Monitoring**: No metrics/observability (logs only)  
-4. **Scaling**: Single API instance (no load balancing)
-5. **Real-time**: No WebSocket support (polling only)
-
-## Development
-
-### Building for Production
+Start from the tracked example file:
 
 ```bash
-# Build TypeScript
-npm run build
-
-# Start production server  
-npm start
+cp .env.example .env
 ```
 
-### Docker API (Optional)
-
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY dist ./dist
-EXPOSE 3000
-CMD ["node", "dist/index.js"]
-```
-
-### Testing with cqlsh
+Because the application does not load `.env` itself, export it before `npm run dev`:
 
 ```bash
-# Connect to ScyllaDB
-docker-compose exec scylla cqlsh
-
-# View data
-USE chat;
-SELECT * FROM messages LIMIT 10;
-SELECT * FROM message_dedupe LIMIT 10;
-
-# Check replication
-DESCRIBE KEYSPACE chat;
+set -a
+. ./.env
+set +a
 ```
 
-## License
+Available variables in `.env.example`:
 
-MIT License - Feel free to modify and use for learning purposes.
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `SCYLLA_CONTACT_POINTS` | `127.0.0.1` | Comma-separated ScyllaDB contact points. |
+| `SCYLLA_DATACENTER` | `datacenter1` | Local datacenter name used by the driver. |
+| `SCYLLA_KEYSPACE` | `chat` | Keyspace used by the API. |
+| `API_PORT` | `3000` | HTTP port for the API. |
+| `DEFAULT_WRITE_CONSISTENCY` | `ONE` | Default write consistency. |
+| `DEFAULT_READ_CONSISTENCY` | `ONE` | Default read consistency. |
+| `REQUEST_BODY_LIMIT` | `1mb` | Express JSON body limit. |
+| `CORS_ORIGIN` | `*` | Allowed CORS origin; permissive by default for local development. |
+| `USE_SOFT_ERRORS` | `false` | Return HTTP 200 for handled errors when set to `true`. |
 
----
+Supported consistency names are `ANY`, `ONE`, `TWO`, `THREE`, `QUORUM`, `ALL`, `LOCAL_ONE`, and `LOCAL_QUORUM`.
 
-**Note**: This application is designed for educational purposes to demonstrate ScyllaDB concepts. Do not use in production without proper security, monitoring, and error handling implementations.
+## Tests
+
+Install dependencies before running tests:
+
+```bash
+npm install
+```
+
+Unit tests do not require a running API:
+
+```bash
+npm test -- tests/unit/
+```
+
+Integration tests call `http://localhost:3000` and require ScyllaDB, the schema, and the API to be running:
+
+```bash
+docker compose up -d
+set -a; . ./.env; set +a
+npm run dev
+```
+
+In another terminal:
+
+```bash
+npm test -- tests/integration/
+```
+
+The integration tests write sample data to the API's configured keyspace. Use a disposable local database when running them.
+
+The repository also provides:
+
+```bash
+# Run all Jest tests; integration tests need the API running.
+npm test
+
+# Run the helper, which falls back to unit tests if the API is unavailable.
+./scripts/run-tests.sh
+
+# Run all ScyllaDB concept checks.
+./scripts/test-scylla-concepts.sh
+
+# Run one concept check.
+./scripts/test-scylla-concepts.sh lwt
+```
+
+Available concept arguments are `all`, `lwt`, `consistency`, `pagination`, `partitioning`, and `performance`. For the manual frontend checks, open `tests/frontend/frontend-tests.html` in a browser.
+
+## Limitations and Security
+
+- There is no authentication or authorization. Anyone who can reach the API can read and write messages.
+- The default CORS policy is `*`; restrict `CORS_ORIGIN` before exposing the API beyond local development.
+- The frontend is a static local client and hard-codes `http://localhost:3000`.
+- There are no WebSockets, subscriptions, or push notifications; refreshes are request-based.
+- There are no metrics or tracing, and logging is basic request/error output.
+- The API runs as one process and has no production deployment, load balancing, or operational configuration.
+- The deduplication table has no retention or cleanup policy.
+- The Docker cluster files are educational local fixtures, not a hardened ScyllaDB deployment. Do not expose them to untrusted networks.
+
+Do not use this project in production without adding authentication, authorization, input and abuse controls, secure CORS and network policies, TLS, secrets management, monitoring, backups, data-retention policies, and a deployment design appropriate for the workload.
+
+## Contribution and License Status
+
+There is no `CONTRIBUTING.md` in the repository, so there is no repository-specific contribution process to follow.
+
+There is no `LICENSE` file. The project should not be assumed to be MIT-licensed; confirm licensing with the repository owner before redistributing or using it outside personal learning.
+
+## Educational Scope
+
+This repository is intended for learning and local experimentation with ScyllaDB concepts. The examples show how a small API maps channel history, TimeUUID ordering, LWT deduplication, and consistency settings onto CQL. They do not establish production performance, availability, security, or fault-tolerance guarantees.
