@@ -1,4 +1,4 @@
-import { Client, types, auth } from 'cassandra-driver';
+import { Client, types, auth } from "cassandra-driver";
 
 let client: Client;
 
@@ -10,35 +10,42 @@ export function toTimestamp(messageId: types.TimeUuid): Date {
   return messageId.getDate();
 }
 
-export async function initializeDatabase(): Promise<{ dc: string; keyspace: string }> {
-  const contactPoints = (process.env.SCYLLA_CONTACT_POINTS || '127.0.0.1').split(',');
-  const localDataCenter = process.env.SCYLLA_DATACENTER || 'datacenter1';
-  const keyspace = process.env.SCYLLA_KEYSPACE || 'chat';
-  
-  console.log(`Connecting to ScyllaDB at ${contactPoints.join(', ')} (DC: ${localDataCenter})`);
-  
+export async function initializeDatabase(): Promise<{
+  dc: string;
+  keyspace: string;
+}> {
+  const contactPoints = (
+    process.env.SCYLLA_CONTACT_POINTS || "127.0.0.1"
+  ).split(",");
+  const localDataCenter = process.env.SCYLLA_DATACENTER || "datacenter1";
+  const keyspace = process.env.SCYLLA_KEYSPACE || "chat";
+
+  console.log(
+    `Connecting to ScyllaDB at ${contactPoints.join(", ")} (DC: ${localDataCenter})`,
+  );
+
   client = new Client({
     contactPoints,
     localDataCenter,
-    keyspace
+    keyspace,
   });
-  
+
   try {
     await client.connect();
     // Get datacenter info (simplified)
     const dc = localDataCenter; // Use the configured datacenter
-    
+
     console.log(`Connected to ScyllaDB - DC: ${dc}, Keyspace: ${keyspace}`);
     return { dc, keyspace };
   } catch (error) {
-    console.error('Failed to connect to ScyllaDB:', error);
+    console.error("Failed to connect to ScyllaDB:", error);
     throw error;
   }
 }
 
 export function getClient(): Client {
   if (!client) {
-    throw new Error('Database not initialized');
+    throw new Error("Database not initialized");
   }
   return client;
 }
@@ -59,7 +66,7 @@ let selectMessagesAfterStmt: any;
 export async function prepareStatements(): Promise<void> {
   // For now, we'll use direct queries instead of prepared statements
   // This simplifies the implementation and avoids TypeScript issues
-  console.log('Statement preparation ready (using direct queries)');
+  console.log("Statement preparation ready (using direct queries)");
 }
 
 export async function insertMessage(
@@ -68,30 +75,36 @@ export async function insertMessage(
   userId: string,
   content: string,
   createdAt: Date,
-  consistency: number
+  consistency: number,
 ): Promise<void> {
   const client = getClient();
-  const query = 'INSERT INTO messages (channel_id, message_id, user_id, content, created_at) VALUES (?, ?, ?, ?, ?)';
-  await client.execute(query, [channelId, messageId, userId, content, createdAt], {
-    consistency,
-    prepare: true
-  });
+  const query =
+    "INSERT INTO messages (channel_id, message_id, user_id, content, created_at) VALUES (?, ?, ?, ?, ?)";
+  await client.execute(
+    query,
+    [channelId, messageId, userId, content, createdAt],
+    {
+      consistency,
+      prepare: true,
+    },
+  );
 }
 
 export async function checkDedupe(
   channelId: string,
   clientMsgId: string,
-  consistency: number
+  consistency: number,
 ): Promise<boolean> {
   const client = getClient();
-  const query = 'INSERT INTO message_dedupe (channel_id, client_msg_id) VALUES (?, ?) IF NOT EXISTS';
+  const query =
+    "INSERT INTO message_dedupe (channel_id, client_msg_id) VALUES (?, ?) IF NOT EXISTS";
   const result = await client.execute(query, [channelId, clientMsgId], {
     consistency,
-    prepare: true
+    prepare: true,
   });
-  
+
   // Return true if the LWT was applied (not a duplicate)
-  return result.rows[0]['[applied]'];
+  return result.rows[0]["[applied]"];
 }
 
 export async function getMessages(
@@ -99,24 +112,27 @@ export async function getMessages(
   limit: number,
   before?: string,
   after?: string,
-  consistency: number = types.consistencies.one
+  consistency: number = types.consistencies.one,
 ): Promise<any[]> {
   const client = getClient();
-  let query = 'SELECT channel_id, message_id, user_id, content, created_at FROM messages WHERE channel_id = ? LIMIT ?';
+  let query =
+    "SELECT channel_id, message_id, user_id, content, created_at FROM messages WHERE channel_id = ? LIMIT ?";
   let params: any[] = [channelId, limit];
-  
+
   if (before) {
-    query = 'SELECT channel_id, message_id, user_id, content, created_at FROM messages WHERE channel_id = ? AND message_id < ? LIMIT ?';
+    query =
+      "SELECT channel_id, message_id, user_id, content, created_at FROM messages WHERE channel_id = ? AND message_id < ? LIMIT ?";
     params = [channelId, types.TimeUuid.fromString(before), limit];
   } else if (after) {
-    query = 'SELECT channel_id, message_id, user_id, content, created_at FROM messages WHERE channel_id = ? AND message_id > ? LIMIT ?';
+    query =
+      "SELECT channel_id, message_id, user_id, content, created_at FROM messages WHERE channel_id = ? AND message_id > ? LIMIT ?";
     params = [channelId, types.TimeUuid.fromString(after), limit];
   }
-  
+
   const result = await client.execute(query, params, {
     consistency,
-    prepare: true
+    prepare: true,
   });
-  
+
   return result.rows;
 }

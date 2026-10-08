@@ -1,166 +1,46 @@
-# 🧪 Guia Completo de Testes
+# Testes e verificação
 
-## ✅ Problema Resolvido!
+## Checks sem serviços externos
 
-Corrigi todos os problemas de configuração e dependências dos testes. Agora você pode executar:
-
-## 🚀 Execução Rápida
-
-### 1. Testes Unitários (Sem API)
-```bash
-npm test -- tests/unit/
-```
-
-**Saída esperada:**
-```
-PASS tests/unit/validators.test.ts
-PASS tests/unit/db.test.ts
-
-Test Suites: 2 passed, 2 total
-Tests: 25 passed, 25 total
-✅ Todos os testes unitários passaram!
-```
-
-### 2. Testes de Integração (Com API)
-
-**Terminal 1 - Inicie os serviços:**
-```bash
-docker-compose up -d
-npm run dev
-```
-
-**Terminal 2 - Execute os testes:**
-```bash
-npm test -- tests/integration/
-```
-
-**Saída esperada:**
-```
-PASS tests/integration/api-direct.test.ts
-PASS tests/integration/performance-direct.test.ts
-
-✅ LWT: Idempotência funcionando
-✅ Consistency: ONE, QUORUM, ALL testados
-✅ Pagination: Cursors before/after validados
-✅ Partitioning: Isolamento por canal verificado
-✅ Performance: 25 mensagens em ~200ms
-```
-
-## 📋 O Que Foi Corrigido
-
-### 1. **Dependências Adicionadas**
-```bash
-npm install dotenv node-fetch @types/node-fetch
-```
-
-### 2. **Configuração do Jest**
-- ✅ Setup de fetch global para Node.js
-- ✅ Polyfill de performance para testes
-- ✅ Configuração de environment variables
-
-### 3. **Código do Banco**
-- ✅ Removido `requestTimeout` incompatível
-- ✅ Corrigido acesso a `metadata.hosts`
-- ✅ Simplificados prepared statements
-- ✅ Corrigido mapeamento de consistency levels
-
-### 4. **Validadores**
-- ✅ Corrigido acesso a `types.consistencies`
-- ✅ Adicionado type safety para consistency levels
-
-## 🎯 Testes Implementados
-
-### **Testes Unitários**
-- ✅ Validação de consistency levels
-- ✅ Validação de inputs (channel_id, user_id, content)
-- ✅ Validação de paginação (before/after cursors)
-- ✅ Utilitários TimeUUID (nowId, toTimestamp)
-
-### **Testes de Integração** 
-- ✅ **LWT**: Deduplicação via `client_msg_id`
-- ✅ **Consistency**: ONE, QUORUM, ALL para read/write
-- ✅ **Pagination**: Before/after cursors sem sobreposição
-- ✅ **Partitioning**: Isolamento perfeito por canal
-- ✅ **Performance**: Operações concorrentes
-- ✅ **Validation**: Rejeição de inputs inválidos
-
-## 🔧 Scripts Disponíveis
-
-### **Teste Rápido**
-```bash
-./scripts/run-tests.sh
-```
-Detecta automaticamente se a API está rodando e executa os testes apropriados.
-
-### **Teste de Conceitos ScyllaDB**
-```bash
-./scripts/test-scylla-concepts.sh
-```
-Testa via cURL todos os conceitos do ScyllaDB:
-- LWT idempotência
-- Consistency levels  
-- Paginação temporal
-- Particionamento
-- Performance básica
-
-### **Frontend Visual**
-Abra `tests/frontend/frontend-tests.html` no browser e click "🚀 RUN ALL TESTS"
-
-## 📊 Exemplo de Execução Completa
-
-```bash
-# 1. Instalar dependências
-npm install
-
-# 2. Iniciar ScyllaDB
-docker-compose up -d
-
-# 3. Iniciar API (terminal separado)
-npm run dev
-
-# 4. Executar testes
+```sh
+npm ci
 npm test
-
-# Resultado:
-# ✅ 25 unit tests passed
-# ✅ 35+ integration tests passed  
-# ✅ All ScyllaDB concepts validated
+npm run build
+npm audit --omit=dev
+npm audit
 ```
 
-## 🏆 Conceitos Validados
+`npm test` roda `test:unit` (Jest/ts-jest, 48 testes) e `test:frontend` (Node test runner, 7 testes). As suítes backend usam adapters temporários; não se conectam ao DEV nem ao Scylla. Verificam validação, malformed JSON, limites HTTP, canais, paginação antes/depois, retries concorrentes, persistência ao reabrir, seed único, corrupção, lock e SSE. Os helpers frontend cobrem merge cronológico, TimeUUID rollover, filtro por canal, busca e retry após edição/troca de perfil.
 
-| Conceito | Teste | Status |
-|----------|--------|--------|
-| **LWT Idempotência** | Duplicate `client_msg_id` → `deduped: true` | ✅ |
-| **Consistency ONE** | Rápido, pode ser inconsistente | ✅ |
-| **Consistency QUORUM** | Balanceado, maioria dos nós | ✅ |
-| **Consistency ALL** | Forte, todos os nós (pode falhar) | ✅ |
-| **Paginação TimeUUID** | Before/after cursors, sem overlap | ✅ |
-| **Particionamento** | Isolamento perfeito por `channel_id` | ✅ |
-| **Ordenação Temporal** | Mensagens newest-first por TimeUUID | ✅ |
-| **Performance** | 25+ msgs concorrentes em <1s | ✅ |
+`npm run test:watch` acompanha apenas Jest. `scripts/run-tests.sh` executa os checks padrão; `--scylla` seleciona os testes externos. `tests/frontend/frontend-tests.html` é um harness puro de helpers, não uma suíte end-to-end nem uma prova de banco real.
 
-## 🚨 Se Algo Não Funcionar
+## API externa / Scylla
 
-1. **ScyllaDB não conecta:**
-   ```bash
-   docker-compose logs scylla
-   docker-compose restart scylla
-   ```
+```sh
+# Em servidor de laboratório separado, com schema e Scylla prontos:
+STORAGE_MODE=scylla API_PORT=4320 npm run dev
+# Outro terminal:
+API_TEST_URL=http://localhost:4320 npm run test:scylla
+```
 
-2. **API não responde:**
-   ```bash
-   curl http://localhost:3000/health
-   npm run dev
-   ```
+A suíte exige `/health.storage=scylla`, cria canais com nomes únicos e grava dados de teste. Não execute contra uma demo com dados importantes. Não exclui esses canais: reserve um keyspace de laboratório. `npm run test:integration` e `scripts/test-scylla-concepts.sh` apontam para essa mesma suíte de contrato e carga pequena. Ela valida retry/LWT observável, isolamento, paginação e consistência aceita, mas não estabelece garantias de cluster ou desempenho.
 
-3. **Testes falham:**
-   ```bash
-   # Rode apenas unit tests primeiro
-   npm test -- tests/unit/
-   
-   # Depois integration com API rodando
-   npm test -- tests/integration/
-   ```
+Para verificar **apenas o contrato HTTP** usando JSON local, permita esse modo explicitamente:
 
-Todos os testes estão **funcionando perfeitamente** agora! 🎉
+```sh
+API_TEST_ALLOW_LOCAL=1 API_TEST_URL=http://localhost:4320 npm run test:integration
+```
+
+Esse resultado não é um teste ScyllaDB. Nesta entrega, os testes externos foram rodados em processo local isolado; nenhuma instância Scylla foi iniciada.
+
+## QA manual
+
+Use duas abas na mesma origem. Crie um canal na primeira, confirme que aparece na segunda sem reload, selecione-o e envie texto; confira uma única cópia em cada aba. Envie HTML literal e confirme que permanece texto. Troque o nome, recarregue, confira perfil e rascunho por canal. Simule resposta perdida após uma gravação; repita o envio e confira mesma mensagem/ID.
+
+Com mais de 50 mensagens, recarregue, selecione o canal e carregue páginas anteriores. Confira ordem, ausência de sobreposição e botão oculto ao esgotar. Desconecte SSE, grave mais de uma página e reconecte: o histórico deve recuperar o intervalo. Atrase a resposta de um canal e troque de canal: dados antigos não devem substituir a seleção.
+
+Em 390×844, verifique overflow, composer, drawer, foco no abrir/fechar, Tab/Shift+Tab e diálogos com Escape/Cancelar. A busca deve declarar o número carregado; participantes não devem alegar presença. Testes com viewport não substituem telefone físico, tecnologia assistiva nem teste remoto.
+
+## Evidência desta entrega
+
+Veja [integration-qa.md](docs/reports/integration-qa.md), logs em `docs/reports/` e capturas reais em `docs/screenshots/`. Os resultados antigos nos handoffs são históricos; os logs de integração são o checkpoint final. O audit completo pode sair com status 1 devido aos 20 achados moderados de desenvolvimento; runtime está em zero. CI exige testes, build e audit de runtime, sem alegar que o audit completo está limpo.
