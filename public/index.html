@@ -1,494 +1,287 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mini Discord - ScyllaDB Chat</title>
-    <style>
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #2c2f33;
-            color: #ffffff;
-        }
-        
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background-color: #36393f;
-            border-radius: 8px;
-            padding: 20px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-        }
-        
-        h1 {
-            color: #7289da;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .form-section {
-            background-color: #2c2f33;
-            padding: 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        
-        .form-row {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        
-        label {
-            min-width: 100px;
-            font-weight: bold;
-            color: #b9bbbe;
-        }
-        
-        input, select, textarea {
-            padding: 8px;
-            border: 1px solid #4f545c;
-            border-radius: 4px;
-            background-color: #40444b;
-            color: #ffffff;
-            font-size: 14px;
-        }
-        
-        input[type="text"] {
-            flex: 1;
-            min-width: 200px;
-        }
-        
-        textarea {
-            flex: 1;
-            min-height: 60px;
-            resize: vertical;
-        }
-        
-        select {
-            min-width: 120px;
-        }
-        
-        button {
-            background-color: #7289da;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: bold;
-        }
-        
-        button:hover {
-            background-color: #5b6eae;
-        }
-        
-        button:disabled {
-            background-color: #4f545c;
-            cursor: not-allowed;
-        }
-        
-        .messages-section {
-            background-color: #2c2f33;
-            padding: 20px;
-            border-radius: 8px;
-        }
-        
-        .messages-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-        
-        .pagination-controls {
-            display: flex;
-            gap: 10px;
-        }
-        
-        .message {
-            background-color: #36393f;
-            padding: 15px;
-            margin-bottom: 10px;
-            border-radius: 8px;
-            border-left: 4px solid #7289da;
-        }
-        
-        .message-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 8px;
-        }
-        
-        .message-author {
-            font-weight: bold;
-            color: #7289da;
-        }
-        
-        .message-time {
-            font-size: 12px;
-            color: #72767d;
-        }
-        
-        .message-id {
-            font-size: 10px;
-            color: #4f545c;
-            font-family: monospace;
-        }
-        
-        .message-content {
-            line-height: 1.4;
-        }
-        
-        .status {
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
-            font-size: 14px;
-        }
-        
-        .status.success {
-            background-color: #43b581;
-            color: white;
-        }
-        
-        .status.error {
-            background-color: #f04747;
-            color: white;
-        }
-        
-        .status.warning {
-            background-color: #faa61a;
-            color: white;
-        }
-        
-        .status.info {
-            background-color: #7289da;
-            color: white;
-        }
-        
-        .hidden {
-            display: none;
-        }
-        
-        @media (max-width: 600px) {
-            .form-row {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            label {
-                min-width: auto;
-            }
-            
-            .messages-header {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .pagination-controls {
-                justify-content: center;
-            }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Mini Discord - ScyllaDB Chat</h1>
-        
-        <!-- Message Form -->
-        <div class="form-section">
-            <h3>Send Message</h3>
-            <form id="messageForm">
-                <div class="form-row">
-                    <label for="channelId">Channel:</label>
-                    <input type="text" id="channelId" value="general" required>
-                    
-                    <label for="userId">User:</label>
-                    <input type="text" id="userId" value="gustavo" required>
-                </div>
-                
-                <div class="form-row">
-                    <label for="content">Message:</label>
-                    <textarea id="content" placeholder="Type your message here..." required></textarea>
-                </div>
-                
-                <div class="form-row">
-                    <label for="writeConsistency">Write Consistency:</label>
-                    <select id="writeConsistency">
-                        <option value="ONE">ONE (Fast)</option>
-                        <option value="QUORUM">QUORUM (Balanced)</option>
-                        <option value="ALL">ALL (Strong)</option>
-                        <option value="LOCAL_ONE">LOCAL_ONE</option>
-                        <option value="LOCAL_QUORUM">LOCAL_QUORUM</option>
-                    </select>
-                    
-                    <label for="clientMsgId">Client Msg ID:</label>
-                    <input type="text" id="clientMsgId" placeholder="Optional dedup ID">
-                </div>
-                
-                <div class="form-row">
-                    <button type="submit" id="sendBtn">Send Message</button>
-                </div>
-            </form>
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#171e29" />
+    <title>Mini Discord · Felipe Alves</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <a class="skip" href="#composer">Pular para escrever mensagem</a>
+    <div class="app">
+      <aside class="server-rail" aria-label="Comunidade">
+        <a class="server-mark" href="/" aria-label="Mini Discord, início"
+          >md<span></span></a
+        ><span class="rail-line"></span
+        ><button
+          class="rail-about"
+          id="about-open"
+          aria-label="Sobre o Mini Discord"
+        >
+          ?</button
+        ><span class="rail-signature">FA</span>
+      </aside>
+      <button
+        id="drawer-backdrop"
+        class="drawer-backdrop"
+        aria-label="Fechar navegação"
+        hidden
+      ></button>
+      <aside class="sidebar" id="sidebar" aria-label="Navegação dos canais">
+        <header class="community">
+          <div class="brand-line">Mini Discord <span>demo</span></div>
+          <p>Um espaço para trocar ideias.</p>
+          <button
+            class="mobile-only close-nav"
+            id="nav-close"
+            aria-label="Fechar canais"
+          >
+            ×
+          </button>
+        </header>
+        <div class="channel-heading">
+          <h2>Canais de texto</h2>
+          <button
+            id="channel-open"
+            class="icon-button"
+            aria-label="Criar canal"
+          >
+            +
+          </button>
         </div>
-        
-        <!-- Status Messages -->
-        <div id="statusContainer"></div>
-        
-        <!-- Messages Display -->
-        <div class="messages-section">
-            <div class="messages-header">
-                <h3>Messages</h3>
-                <div class="pagination-controls">
-                    <label for="readConsistency">Read Consistency:</label>
-                    <select id="readConsistency">
-                        <option value="ONE">ONE (Fast)</option>
-                        <option value="QUORUM">QUORUM (Balanced)</option>
-                        <option value="ALL">ALL (Strong)</option>
-                        <option value="LOCAL_ONE">LOCAL_ONE</option>
-                        <option value="LOCAL_QUORUM">LOCAL_QUORUM</option>
-                    </select>
-                    <button id="loadLatestBtn">Load Latest</button>
-                    <button id="loadOlderBtn" class="hidden">Load Older</button>
-                </div>
-            </div>
-            
-            <div id="messagesContainer">
-                <p style="text-align: center; color: #72767d;">Click "Load Latest" to fetch messages</p>
-            </div>
+        <nav id="channels" aria-label="Canais">
+          <p class="sidebar-note">Carregando canais…</p>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="demo-note">
+            <span class="tiny-mark">md</span>
+            <p>Projeto de portfólio<br /><strong>por Felipe Alves</strong></p>
+          </div>
+          <button id="profile-open" class="profile">
+            <span class="avatar own-avatar" id="profile-avatar">V</span
+            ><span
+              ><strong id="profile-name">Visitante</strong
+              ><small>Editar seu nome</small></span
+            ><span aria-hidden="true">✎</span>
+          </button>
         </div>
+      </aside>
+      <main class="conversation">
+        <header class="channel-bar">
+          <button
+            id="nav-open"
+            class="icon-button mobile-only"
+            aria-label="Abrir canais"
+            aria-expanded="false"
+            aria-controls="sidebar"
+          >
+            ☰</button
+          ><span class="hash" aria-hidden="true">#</span>
+          <h1 id="channel-title">Geral</h1>
+          <span class="channel-subtitle" id="channel-subtitle"
+            >Conversa aberta, ideias bem-vindas.</span
+          ><button
+            id="details-toggle"
+            class="icon-button"
+            aria-label="Mostrar contexto do canal"
+            aria-expanded="true"
+            aria-controls="details"
+          >
+            ⓘ
+          </button>
+        </header>
+        <div class="connection-bar">
+          <span id="connection-status" role="status"
+            >Conectando às atualizações…</span
+          ><button id="connection-retry" hidden>Reconectar</button>
+        </div>
+        <div class="search-bar">
+          <label for="search">Buscar nesta conversa</label
+          ><input
+            id="search"
+            type="search"
+            aria-label="Buscar nas mensagens carregadas"
+            placeholder="Palavra ou participante"
+            autocomplete="off"
+          /><span id="search-scope">Somente mensagens carregadas</span>
+        </div>
+        <div
+          id="timeline"
+          class="timeline"
+          tabindex="0"
+          aria-label="Histórico da conversa"
+        >
+          <div class="channel-intro">
+            <span class="intro-hash" aria-hidden="true">#</span>
+            <p>Este é o começo de uma boa conversa.</p>
+            <h2 id="intro-title">Bem-vindo ao #Geral</h2>
+            <p id="intro-description">
+              Escolha um canal e compartilhe uma ideia.
+            </p>
+          </div>
+          <div class="history-controls">
+            <button id="older" hidden>Carregar mensagens anteriores</button
+            ><button id="history-retry" hidden>
+              Tentar carregar novamente
+            </button>
+          </div>
+          <p id="history-status" class="history-status" role="status">
+            Carregando conversa…
+          </p>
+          <div
+            id="messages"
+            role="log"
+            aria-label="Mensagens"
+            aria-live="polite"
+            aria-relevant="additions"
+          ></div>
+        </div>
+        <div class="composer-area">
+          <p id="send-status" class="send-status" role="status" hidden></p>
+          <form id="message-form">
+            <div class="composer-box">
+              <label class="sr-only" for="composer">Sua mensagem</label
+              ><textarea
+                id="composer"
+                rows="1"
+                maxlength="2000"
+                placeholder="Conversar em #Geral"
+                aria-describedby="composer-hint"
+              ></textarea
+              ><button
+                id="send"
+                type="submit"
+                aria-label="Enviar mensagem"
+                disabled
+              >
+                <span>Enviar</span><span aria-hidden="true">↑</span>
+              </button>
+            </div>
+            <div class="composer-footer">
+              <span id="composer-hint"
+                >Enter envia <span>·</span> Shift + Enter quebra a linha</span
+              ><span id="draft-status">Seu rascunho fica neste navegador</span>
+            </div>
+          </form>
+        </div>
+      </main>
+      <aside class="details" id="details" aria-label="Contexto do canal">
+        <div class="details-heading">Neste canal</div>
+        <span class="context-symbol" aria-hidden="true">#</span>
+        <h2 id="detail-title">Geral</h2>
+        <p id="detail-description">Conversa aberta, ideias bem-vindas.</p>
+        <div class="detail-rule"></div>
+        <h3>Um projeto, uma conversa</h3>
+        <p>
+          Explore os canais, crie um assunto e teste uma conversa em tempo real.
+        </p>
+        <div class="demo-label">Ambiente de demonstração</div>
+        <p>
+          As conversas iniciais e seus participantes são exemplos. Novas
+          mensagens são reais e compartilhadas entre quem acessa esta demo.
+        </p>
+        <button class="text-button" id="about-details">
+          Conhecer o projeto
+        </button>
+        <div class="detail-rule"></div>
+        <h3>Participantes da conversa</h3>
+        <p class="small">
+          Perfis presentes nas mensagens carregadas. Não indica quem está
+          online.
+        </p>
+        <ul id="participants"></ul>
+      </aside>
     </div>
-
-    <script>
-        const API_BASE = 'http://localhost:3000';
-        let currentChannelId = 'general';
-        let nextBeforeCursor = null;
-        
-        // DOM elements
-        const messageForm = document.getElementById('messageForm');
-        const channelIdInput = document.getElementById('channelId');
-        const userIdInput = document.getElementById('userId');
-        const contentInput = document.getElementById('content');
-        const writeConsistencySelect = document.getElementById('writeConsistency');
-        const readConsistencySelect = document.getElementById('readConsistency');
-        const clientMsgIdInput = document.getElementById('clientMsgId');
-        const sendBtn = document.getElementById('sendBtn');
-        const loadLatestBtn = document.getElementById('loadLatestBtn');
-        const loadOlderBtn = document.getElementById('loadOlderBtn');
-        const messagesContainer = document.getElementById('messagesContainer');
-        const statusContainer = document.getElementById('statusContainer');
-        
-        // Status message helper
-        function showStatus(message, type = 'info', duration = 5000) {
-            const statusDiv = document.createElement('div');
-            statusDiv.className = `status ${type}`;
-            statusDiv.textContent = message;
-            
-            statusContainer.appendChild(statusDiv);
-            
-            if (duration > 0) {
-                setTimeout(() => {
-                    if (statusDiv.parentNode) {
-                        statusDiv.parentNode.removeChild(statusDiv);
-                    }
-                }, duration);
-            }
-        }
-        
-        // Format timestamp
-        function formatTimestamp(isoString) {
-            const date = new Date(isoString);
-            return date.toLocaleString();
-        }
-        
-        // Render messages
-        function renderMessages(messages, append = false) {
-            if (!append) {
-                messagesContainer.innerHTML = '';
-            }
-            
-            if (messages.length === 0 && !append) {
-                messagesContainer.innerHTML = '<p style="text-align: center; color: #72767d;">No messages found</p>';
-                return;
-            }
-            
-            messages.forEach(message => {
-                const messageDiv = document.createElement('div');
-                messageDiv.className = 'message';
-                messageDiv.innerHTML = `
-                    <div class="message-header">
-                        <span class="message-author">${escapeHtml(message.user_id)}</span>
-                        <span class="message-time">${formatTimestamp(message.created_at)}</span>
-                    </div>
-                    <div class="message-content">${escapeHtml(message.content)}</div>
-                    <div class="message-id">ID: ${message.message_id}</div>
-                `;
-                
-                if (append) {
-                    messagesContainer.appendChild(messageDiv);
-                } else {
-                    messagesContainer.insertBefore(messageDiv, messagesContainer.firstChild);
-                }
-            });
-        }
-        
-        // HTML escape helper
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
-        
-        // Send message
-        async function sendMessage(event) {
-            event.preventDefault();
-            
-            const channelId = channelIdInput.value.trim();
-            const userId = userIdInput.value.trim();
-            const content = contentInput.value.trim();
-            const consistency = writeConsistencySelect.value;
-            const clientMsgId = clientMsgIdInput.value.trim();
-            
-            if (!channelId || !userId || !content) {
-                showStatus('Please fill in all required fields', 'error');
-                return;
-            }
-            
-            sendBtn.disabled = true;
-            sendBtn.textContent = 'Sending...';
-            
-            try {
-                const payload = {
-                    channel_id: channelId,
-                    user_id: userId,
-                    content: content,
-                    consistency: consistency
-                };
-                
-                if (clientMsgId) {
-                    payload.client_msg_id = clientMsgId;
-                }
-                
-                const response = await fetch(`${API_BASE}/api/messages`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(payload)
-                });
-                
-                const result = await response.json();
-                
-                if (result.ok) {
-                    if (result.deduped) {
-                        showStatus('Message was deduplicated (already exists)', 'warning');
-                    } else {
-                        showStatus('Message sent successfully!', 'success');
-                        contentInput.value = '';
-                        clientMsgIdInput.value = '';
-                        
-                        // Auto-refresh if viewing same channel
-                        if (channelId === currentChannelId) {
-                            await loadMessages(false);
-                        }
-                    }
-                    
-                    if (result.warning) {
-                        showStatus(`Warning: ${result.warning}`, 'warning');
-                    }
-                } else {
-                    showStatus(`Error: ${result.error.message}`, 'error');
-                }
-                
-            } catch (error) {
-                console.error('Error sending message:', error);
-                showStatus('Failed to send message', 'error');
-            } finally {
-                sendBtn.disabled = false;
-                sendBtn.textContent = 'Send Message';
-            }
-        }
-        
-        // Load messages
-        async function loadMessages(loadOlder = false) {
-            const channelId = channelIdInput.value.trim() || 'general';
-            const consistency = readConsistencySelect.value;
-            
-            currentChannelId = channelId;
-            
-            const btn = loadOlder ? loadOlderBtn : loadLatestBtn;
-            btn.disabled = true;
-            btn.textContent = loadOlder ? 'Loading...' : 'Loading...';
-            
-            try {
-                let url = `${API_BASE}/api/channels/${encodeURIComponent(channelId)}/messages?consistency=${consistency}&limit=20`;
-                
-                if (loadOlder && nextBeforeCursor) {
-                    url += `&before=${encodeURIComponent(nextBeforeCursor)}`;
-                }
-                
-                const response = await fetch(url);
-                const result = await response.json();
-                
-                if (result.ok) {
-                    renderMessages(result.items, loadOlder);
-                    
-                    nextBeforeCursor = result.page.next_before;
-                    loadOlderBtn.classList.toggle('hidden', !nextBeforeCursor || result.items.length === 0);
-                    
-                    if (result.warning) {
-                        showStatus(`Warning: ${result.warning}`, 'warning');
-                    }
-                    
-                    showStatus(`Loaded ${result.items.length} messages`, 'info', 2000);
-                } else {
-                    showStatus(`Error: ${result.error.message}`, 'error');
-                }
-                
-            } catch (error) {
-                console.error('Error loading messages:', error);
-                showStatus('Failed to load messages', 'error');
-            } finally {
-                btn.disabled = false;
-                btn.textContent = loadOlder ? 'Load Older' : 'Load Latest';
-            }
-        }
-        
-        // Event listeners
-        messageForm.addEventListener('submit', sendMessage);
-        loadLatestBtn.addEventListener('click', () => loadMessages(false));
-        loadOlderBtn.addEventListener('click', () => loadMessages(true));
-        
-        // Channel change handler
-        channelIdInput.addEventListener('change', () => {
-            nextBeforeCursor = null;
-            loadOlderBtn.classList.add('hidden');
-            messagesContainer.innerHTML = '<p style="text-align: center; color: #72767d;">Click "Load Latest" to fetch messages</p>';
-        });
-        
-        // Auto-focus content input
-        contentInput.focus();
-        
-        // Generate random client_msg_id button (for testing)
-        function generateRandomId() {
-            clientMsgIdInput.value = 'test_' + Math.random().toString(36).substr(2, 9);
-        }
-        
-        // Add generate button
-        const generateBtn = document.createElement('button');
-        generateBtn.type = 'button';
-        generateBtn.textContent = 'Generate ID';
-        generateBtn.onclick = generateRandomId;
-        clientMsgIdInput.parentNode.insertBefore(generateBtn, clientMsgIdInput.nextSibling);
-    </script>
-</body>
+    <dialog id="profile-dialog" aria-labelledby="profile-dialog-title">
+      <form id="profile-form">
+        <div class="dialog-header">
+          <h2 id="profile-dialog-title">Como podemos chamar você?</h2>
+          <button type="button" data-close aria-label="Fechar diálogo">
+            ×
+          </button>
+        </div>
+        <p>
+          Seu nome aparece nas novas mensagens. Ele fica salvo apenas neste
+          navegador.
+        </p>
+        <label for="display-name">Nome de exibição</label
+        ><input
+          id="display-name"
+          required
+          maxlength="50"
+          autocomplete="nickname"
+        />
+        <div class="dialog-actions">
+          <button type="button" data-close>Cancelar</button
+          ><button class="primary" type="submit">Salvar nome</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="channel-dialog" aria-labelledby="channel-dialog-title">
+      <form id="channel-form">
+        <div class="dialog-header">
+          <h2 id="channel-dialog-title">Criar um canal</h2>
+          <button type="button" data-close aria-label="Fechar diálogo">
+            ×
+          </button>
+        </div>
+        <p>
+          Abra um espaço para um novo assunto. O canal será compartilhado nesta
+          demo.
+        </p>
+        <label for="channel-name">Nome do canal</label
+        ><input
+          id="channel-name"
+          required
+          maxlength="60"
+          placeholder="Ex.: livros"
+        /><label for="channel-description"
+          >Descrição <span>(opcional)</span></label
+        ><textarea
+          id="channel-description"
+          maxlength="240"
+          rows="3"
+          placeholder="Sobre o que vamos conversar?"
+        ></textarea>
+        <p id="channel-error" class="error" role="status"></p>
+        <div class="dialog-actions">
+          <button type="button" data-close>Cancelar</button
+          ><button id="channel-submit" class="primary" type="submit">
+            Criar canal
+          </button>
+        </div>
+      </form>
+    </dialog>
+    <dialog id="about-dialog" aria-labelledby="about-dialog-title">
+      <div class="dialog-header">
+        <h2 id="about-dialog-title">Mini Discord</h2>
+        <button type="button" data-close aria-label="Fechar diálogo">×</button>
+      </div>
+      <p class="about-credit">Um projeto de Felipe Alves.</p>
+      <p>
+        Uma pequena comunidade para explorar conversas, persistência de
+        mensagens e atualizações em tempo real.
+      </p>
+      <p>
+        Os perfis e as conversas iniciais são demonstrativos. Você pode criar
+        canais e participar com um nome de sua escolha. Evite compartilhar
+        informações pessoais nesta demo pública.
+      </p>
+      <dl>
+        <dt>Armazenamento desta sessão</dt>
+        <dd id="storage-info">Consultando…</dd>
+        <dt>Conversa ao vivo</dt>
+        <dd>
+          Atualizações pelo servidor, com recuperação do histórico ao
+          reconectar.
+        </dd>
+      </dl>
+      <button class="primary" data-close>Voltar à conversa</button>
+    </dialog>
+  </body>
 </html>

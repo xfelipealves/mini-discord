@@ -7,11 +7,12 @@
     "dev": "tsx watch src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc",
-    "test": "npm run test:unit",
+    "test": "npm run test:unit && npm run test:frontend",
     "test:watch": "jest --watch",
     "test:integration": "npm run test:scylla",
     "test:scylla": "jest --runInBand --testPathPatterns=integration",
-    "test:unit": "jest --runInBand"
+    "test:unit": "jest --runInBand",
+    "test:frontend": "node --test tests/frontend/chat-core.test.mjs"
   },
   "dependencies": {
     "cassandra-driver": "^4.7.2",
