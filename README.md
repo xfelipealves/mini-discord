@@ -1,76 +1,76 @@
 # Mini Discord
 
-Um chat de portfólio por Felipe Alves: canais, conversas persistentes e atualizações em tempo real, com TypeScript e uma interface responsiva em português. Funciona imediatamente com armazenamento local; o modo ScyllaDB preserva o objetivo educacional do projeto.
+A portfolio chat app by Felipe Alves: channels, persistent conversations and realtime updates, built with TypeScript and a responsive interface written in Brazilian Portuguese. It runs immediately with local storage; the ScyllaDB mode preserves the project's original educational goal.
 
-![Interface real do Mini Discord](docs/screenshots/desktop.png)
+![Real Mini Discord interface](docs/screenshots/desktop.png)
 
-## Começar
+## Getting started
 
-Requer Node.js 20+ e npm. Após clonar e instalar com `npm ci`, um único comando inicia a interface e a API:
+Requires Node.js 20+ and npm. After cloning and installing with `npm ci`, a single command starts both the interface and the API:
 
 ```sh
 npm run dev
 ```
 
-Abra **http://localhost:3000**. Não é necessário banco, servidor separado para o frontend ou arquivo `.env`. A primeira execução cria `data/chat.json` com quatro canais e sete mensagens marcadas como demonstrativas. As mensagens novas são reais e compartilhadas por todos que acessam esse servidor.
+Open **http://localhost:3000**. No database, separate frontend server or `.env` file is needed. The first run creates `data/chat.json` with four channels and seven messages marked as demo content. New messages are real and shared by everyone who uses that server.
 
-Se a porta estiver ocupada, escolha outra sem encerrar serviços existentes:
+If the port is busy, pick another one instead of stopping existing services:
 
 ```sh
 API_PORT=4318 npm run dev
 ```
 
-## O que funciona
+## What works
 
-- Criar e trocar canais, enviar com Enter e inserir linhas com Shift + Enter.
-- Histórico com páginas de 50 mensagens, apresentado do mais antigo para o mais recente.
-- Eventos SSE de canais e mensagens, reconexão automática e recuperação de mensagens perdidas, inclusive além de uma página.
-- Repetir um envio não confirmado com a mesma identidade, evitando duplicatas.
-- Nome de exibição e rascunhos por canal salvos no navegador.
-- Busca por texto ou autor **apenas nas mensagens carregadas**; carregar páginas anteriores amplia o alcance.
-- Drawer móvel, diálogos nativos, estados de erro/repetição, foco visível e conteúdo de usuário renderizado como texto.
+- Create and switch channels, send with Enter and insert line breaks with Shift + Enter.
+- History in pages of 50 messages, displayed from oldest to newest.
+- SSE events for channels and messages, automatic reconnection and recovery of missed messages, including gaps larger than one page.
+- Retrying an unconfirmed send with the same identity, which prevents duplicates.
+- Display name and per-channel drafts saved in the browser.
+- Search by text or author **only within loaded messages**; loading older pages widens the scope.
+- Mobile drawer, native dialogs, error/retry states, visible focus and user content rendered as plain text.
 
-Os autores listados no contexto são perfis encontrados no histórico, sem indicar presença online. O nome de exibição é livre e não representa autenticação. Não há voz, anexos ou login.
+Authors listed in the context panel are profiles found in the history; they do not indicate online presence. The display name is free text and is not authentication. There is no voice, attachments or login.
 
 <details>
-<summary>Captura móvel real (390 × 844)</summary>
+<summary>Real mobile capture (390 × 844)</summary>
 
-![Interface móvel](docs/screenshots/mobile.png)
+![Mobile interface](docs/screenshots/mobile.png)
 
 </details>
 
-## Arquitetura
+## Architecture
 
 ```text
-Navegador: HTML + CSS + módulos JavaScript
-  ├─ fetch da mesma origem → Express → validação → Storage
-  └─ EventSource /api/events ← eventos após persistência
-                                               ├─ LocalStorage: JSON no disco
-                                               └─ ScyllaStorage: CQL preparado + LWT
+Browser: HTML + CSS + JavaScript modules
+  ├─ same-origin fetch → Express → validation → Storage
+  └─ EventSource /api/events ← events after persistence
+                                               ├─ LocalStorage: JSON on disk
+                                               └─ ScyllaStorage: prepared CQL + LWT
 ```
 
-`src/index.ts` serve os assets de `public/` e a API no mesmo processo. `src/validators.ts` valida payloads, limites, cursores e consistência. `src/storage.ts` serializa alterações locais, grava um arquivo temporário com fsync e troca atômica, além de impedir dois escritores vivos no mesmo arquivo. `src/scylla-storage.ts` implementa o mesmo contrato usando o driver Cassandra. `public/chat-core.js` centraliza merge, ordenação TimeUUID, busca e identidade de retries; `public/app.js` coordena os fluxos da interface. `src/db.ts` mantém helpers CQL educacionais históricos; a API atual usa os adapters Storage.
+`src/index.ts` serves the `public/` assets and the API from the same process. `src/validators.ts` validates payloads, limits, cursors and consistency levels. `src/storage.ts` serializes local changes, writes a temporary file with fsync and an atomic rename, and prevents two live writers on the same file. `src/scylla-storage.ts` implements the same contract with the Cassandra driver. `public/chat-core.js` centralizes merging, TimeUUID ordering, search and retry identity; `public/app.js` coordinates the interface flows. `src/db.ts` keeps the historical educational CQL helpers; the current API uses the Storage adapters.
 
-## Configuração e persistência
+## Configuration and persistence
 
-A aplicação carrega `.env` automaticamente quando existir; `.env.example` contém as opções. Variáveis exportadas pelo processo têm prioridade.
+The app loads `.env` automatically when present; `.env.example` lists the options. Variables exported by the process take precedence.
 
-| Variável                    | Padrão             | Uso                                          |
-| --------------------------- | ------------------ | -------------------------------------------- |
-| `API_PORT`                  | `3000`             | Porta HTTP da interface/API                  |
-| `STORAGE_MODE`              | `local`            | `local` ou `scylla` explícito                |
-| `LOCAL_DATA_FILE`           | `./data/chat.json` | Caminho do JSON local                        |
-| `REQUEST_BODY_LIMIT`        | `32kb`             | Limite do corpo HTTP                         |
-| `SCYLLA_CONTACT_POINTS`     | `127.0.0.1`        | Hosts separados por vírgula                  |
-| `SCYLLA_DATACENTER`         | `datacenter1`      | Datacenter do driver                         |
-| `SCYLLA_KEYSPACE`           | `chat`             | Keyspace previamente inicializado            |
-| `DEFAULT_WRITE_CONSISTENCY` | `ONE`              | Consistência padrão de escrita               |
-| `DEFAULT_READ_CONSISTENCY`  | `ONE`              | Consistência padrão de leitura               |
-| `CORS_ORIGIN`               | ausente            | Origem extra opcional; desnecessária na demo |
+| Variable                    | Default            | Purpose                                        |
+| --------------------------- | ------------------ | ---------------------------------------------- |
+| `API_PORT`                  | `3000`             | HTTP port for the interface/API                |
+| `STORAGE_MODE`              | `local`            | `local` or an explicit `scylla`                |
+| `LOCAL_DATA_FILE`           | `./data/chat.json` | Path of the local JSON store                   |
+| `REQUEST_BODY_LIMIT`        | `32kb`             | HTTP body size limit                           |
+| `SCYLLA_CONTACT_POINTS`     | `127.0.0.1`        | Comma-separated hosts                          |
+| `SCYLLA_DATACENTER`         | `datacenter1`      | Driver datacenter                              |
+| `SCYLLA_KEYSPACE`           | `chat`             | Pre-initialized keyspace                       |
+| `DEFAULT_WRITE_CONSISTENCY` | `ONE`              | Default write consistency                      |
+| `DEFAULT_READ_CONSISTENCY`  | `ONE`              | Default read consistency                       |
+| `CORS_ORIGIN`               | unset              | Optional extra origin; not needed for the demo |
 
-O JSON e os registros de retry sobrevivem a reloads e reinícios do servidor; nome e rascunhos dependem do localStorage daquele navegador/origem. Uma nova origem/porta tem seu próprio perfil. Não remova arquivos `.lock`/`.recovery` enquanto houver escritores: uma recuperação incerta falha de forma segura e requer inspeção. JSON inválido causa falha de startup, sem apagar dados silenciosamente.
+The JSON store and retry records survive reloads and server restarts; the display name and drafts live in that browser's localStorage for that origin. A new origin or port gets its own profile. Do not remove `.lock`/`.recovery` files while writers are running: an uncertain recovery fails safely and requires inspection. Invalid JSON makes startup fail instead of silently discarding data.
 
-Para servir o build:
+To serve the build:
 
 ```sh
 npm ci
@@ -78,54 +78,54 @@ npm run build
 npm start
 ```
 
-Execute a partir da raiz do projeto e distribua `dist/`, `public/`, `package.json`, lockfile e dependências de runtime. Para uma demo hospedada, configure `LOCAL_DATA_FILE` em volume persistente, rode **uma única instância**, e coloque TLS/reverse proxy à frente. O proxy deve permitir SSE duradouro, desabilitar buffering em `/api/events` e permitir reconexões. Encerrar com SIGINT/SIGTERM libera o lock. Não há Dockerfile novo; os arquivos Compose existentes fornecem apenas o laboratório Scylla.
+Run it from the project root and ship `dist/`, `public/`, `package.json`, the lockfile and runtime dependencies. For a hosted demo, point `LOCAL_DATA_FILE` at a persistent volume, run **a single instance**, and put TLS/a reverse proxy in front. The proxy must allow long-lived SSE, disable buffering on `/api/events` and allow reconnections. Stopping with SIGINT/SIGTERM releases the lock. No Dockerfile is provided; the existing Compose files only provide the Scylla lab.
 
-## Laboratório ScyllaDB
+## ScyllaDB lab
 
-O modo local não simula replicação, quórum nem LWT. Para exercitar CQL de verdade, inicialize o serviço com Docker Compose:
+Local mode does not simulate replication, quorum or LWT. To exercise real CQL, start the service with Docker Compose:
 
 ```sh
 docker compose up -d
-# Aguarde o scylla saudável e scylla-init terminar sem erro.
+# Wait until scylla is healthy and scylla-init exits without errors.
 docker compose logs scylla-init
 STORAGE_MODE=scylla npm run dev
 ```
 
-O schema `docker/init-schema.cql` cria o keyspace `chat` e `messages`. O adapter adiciona `channels` e `message_retries` e registra os canais padrão, sem popular mensagens demonstrativas. Dados locais não são migrados automaticamente. Em `docker-compose.cluster.yml`, os schemas usam NetworkTopologyStrategy/RF=3 para explorar replicação; confira os datacenters e contact points antes de conectar. Essas imagens/configurações são um laboratório histórico, não uma recomendação de operação em produção.
+The `docker/init-schema.cql` schema creates the `chat` keyspace and the `messages` table. The adapter adds `channels` and `message_retries` and registers the default channels without seeding demo messages. Local data is not migrated automatically. In `docker-compose.cluster.yml`, the schemas use NetworkTopologyStrategy/RF=3 to explore replication; check the datacenters and contact points before connecting. These images and settings are a historical lab, not a production operations recommendation.
 
-Conceitos preservados:
+Concepts preserved:
 
-- **Partition key:** `PRIMARY KEY ((channel_id), message_id)` agrupa o histórico de um canal.
-- **Clustering:** `message_id timeuuid` com ordem DESC permite buscar mensagens recentes e páginas por cursor. A UI inverte a apresentação; campos de timestamp do TimeUUID resolvem empates no mesmo milissegundo.
-- **LWT:** `INSERT ... IF NOT EXISTS` em `message_retries` escolhe e salva o payload completo para `(channel_id, client_msg_id)`. Uma repetição pode completar uma escrita interrompida no mesmo primary key.
-- **Consistência:** ONE, TWO, THREE, QUORUM, ALL, LOCAL_ONE, LOCAL_QUORUM e ANY (somente escrita). Níveis explícitos inválidos retornam 400; configuração padrão inválida impede startup. O retry LWT usa LOCAL_QUORUM/LOCAL_SERIAL independentemente da consistência da inserção de mensagem.
-- **RF e datacenter:** SimpleStrategy/RF=1 no laboratório simples; NetworkTopologyStrategy/RF=3 nos exemplos de cluster. Quórum não é uma promessa de desempenho, e um teste com JSON não comprova comportamento distribuído.
+- **Partition key:** `PRIMARY KEY ((channel_id), message_id)` groups a channel's history.
+- **Clustering:** `message_id timeuuid` with DESC order makes recent messages and cursor pages cheap to read. The UI reverses the presentation; TimeUUID timestamp fields break ties within the same millisecond.
+- **LWT:** `INSERT ... IF NOT EXISTS` on `message_retries` picks and stores the full payload for `(channel_id, client_msg_id)`. A retry can complete an interrupted write on the same primary key.
+- **Consistency:** ONE, TWO, THREE, QUORUM, ALL, LOCAL_ONE, LOCAL_QUORUM and ANY (writes only). Invalid explicit levels return 400; an invalid default configuration prevents startup. The LWT retry uses LOCAL_QUORUM/LOCAL_SERIAL regardless of the message insert consistency.
+- **RF and datacenter:** SimpleStrategy/RF=1 in the simple lab; NetworkTopologyStrategy/RF=3 in the cluster examples. Quorum is not a performance promise, and a JSON-backed test does not prove distributed behavior.
 
-`message_dedupe` nos schemas antigos pertence aos helpers educacionais; a API usa `message_retries` com payload recuperável. Não foi executado teste com ScyllaDB vivo nesta entrega.
+`message_dedupe` in the older schemas belongs to the educational helpers; the API uses `message_retries` with a recoverable payload. No test against a live ScyllaDB was run for this delivery.
 
-## API básica
+## Basic API
 
-Todas as respostas JSON usam `ok`; erros têm `error: { code, message }` e status HTTP apropriado.
+Every JSON response includes `ok`; errors carry `error: { code, message }` and an appropriate HTTP status.
 
-| Método e rota                    | Contrato                                                                                                            |
-| -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `GET /health`                    | Modo de storage, datacenter e keyspace; não autentica usuários                                                      |
-| `GET /api/channels`              | `{ ok, items }`                                                                                                     |
-| `POST /api/channels`             | `{ name, description? }` → 201 `{ ok, channel }`; slug repetido → 409                                               |
-| `POST /api/messages`             | `{ channel_id, user_id, content, client_msg_id?, consistency? }` → `{ ok, message_id, message, deduped }`           |
-| `GET /api/channels/:id/messages` | `limit=1..100` (50 padrão), `before` **ou** `after` TimeUUID v1, `consistency?`; `{ items, page: { next_before } }` |
-| `GET /api/events`                | SSE nomeado: `connected`, `channel`, `message`; comentários heartbeat                                               |
+| Method and route                 | Contract                                                                                                                |
+| -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `GET /health`                    | Storage mode, datacenter and keyspace; does not authenticate users                                                      |
+| `GET /api/channels`              | `{ ok, items }`                                                                                                         |
+| `POST /api/channels`             | `{ name, description? }` → 201 `{ ok, channel }`; duplicate slug → 409                                                  |
+| `POST /api/messages`             | `{ channel_id, user_id, content, client_msg_id?, consistency? }` → `{ ok, message_id, message, deduped }`               |
+| `GET /api/channels/:id/messages` | `limit=1..100` (default 50), `before` **or** `after` TimeUUID v1, `consistency?`; `{ items, page: { next_before } }` |
+| `GET /api/events`                | Named SSE events: `connected`, `channel`, `message`; heartbeat comments                                                 |
 
-Histórico da API é DESC e `next_before` é null ao esgotar. Crie o canal antes de enviar; canal desconhecido retorna 404. Nome de canal: 1–60 caracteres e slug ASCII válido; descrição: até 240. Mensagem: 1–2000 caracteres não vazios; autor e retry ID: até 100. O formulário usa até 50 para nome de exibição. Repetir a mesma chave no mesmo canal devolve a mensagem original; mudar autor/conteúdo com a mesma chave retorna 409. Sem chave de retry, cada POST cria uma nova mensagem.
+API history is DESC and `next_before` is null once exhausted. Create the channel before sending; an unknown channel returns 404. Channel name: 1–60 characters with a valid ASCII slug; description: up to 240. Message: 1–2000 non-blank characters; author and retry ID: up to 100. The form allows up to 50 characters for the display name. Repeating the same key in the same channel returns the original message; changing the author or content under the same key returns 409. Without a retry key, every POST creates a new message.
 
 ```sh
 curl http://localhost:3000/api/channels
 curl -X POST http://localhost:3000/api/messages \
   -H 'Content-Type: application/json' \
-  -d '{"channel_id":"general","user_id":"Visitante","content":"Olá!","client_msg_id":"example-1"}'
+  -d '{"channel_id":"general","user_id":"Visitor","content":"Hello!","client_msg_id":"example-1"}'
 ```
 
-## Validação
+## Validation
 
 ```sh
 npm test
@@ -133,12 +133,12 @@ npm run build
 npm audit --omit=dev
 ```
 
-`npm test` executa os testes backend e os helpers frontend sem banco externo. [TESTING.md](TESTING.md) detalha checks opcionais e QA manual; [relatório de integração](docs/reports/integration-qa.md) registra a evidência desta entrega. GitHub Actions executa testes/build/audit de runtime em Node 20 e 22.
+`npm test` runs the backend tests and the frontend helper tests without any external database. [TESTING.md](TESTING.md) covers optional checks and manual QA; the [integration report](docs/reports/integration-qa.md) records the evidence for this delivery. GitHub Actions runs tests, build and the runtime audit on Node 20 and 22.
 
-## Limites atuais
+## Current limits
 
-Esta demo pública aceita nomes livres e mensagens de qualquer visitante. Não há autenticação, autorização, moderação, rate limiting, remoção/edição de mensagens ou recuperação de conta. Não compartilhe informações privadas.
+This public demo accepts free-form names and messages from any visitor. There is no authentication, authorization, moderation, rate limiting, message editing/deletion or account recovery. Do not share private information.
 
-O JSON regrava todo o conjunto, mantém histórico/retries indefinidamente e serve um processo pequeno. SSE é local ao processo: não há broker entre instâncias, buffer de replay ou garantia de entrega; o navegador reconcilia pelo histórico. Um retry Scylla que conclui uma inserção interrompida pode retornar `deduped: true` sem novo evento SSE; clientes precisam reconciliar histórico. Na reconexão sem histórico conhecido, a recuperação pode carregar todas as páginas disponíveis. Busca permanece restrita às mensagens carregadas, sem índice global.
+The JSON store rewrites the whole data set, keeps history and retries indefinitely and serves one small process. SSE is local to the process: there is no broker between instances, no replay buffer and no delivery guarantee; the browser reconciles through history. A Scylla retry that completes an interrupted insert can return `deduped: true` without a new SSE event; clients must reconcile history. When reconnecting without any known message, recovery may load every available page. Search stays limited to loaded messages, with no global index.
 
-Capturas móveis usam viewport emulado, sem comprovar teclado físico de telefone ou leitor de tela. Não foram testados cluster Scylla vivo, deploy remoto ou tolerância a falhas distribuídas. O audit de runtime está sem vulnerabilidades conhecidas; o audit completo ainda registra 20 achados moderados na cadeia Jest/ts-jest via sprintf-js. Não existe licença declarada neste repositório.
+Mobile captures use an emulated viewport and do not prove behavior with a physical phone keyboard or a screen reader. A live Scylla cluster, remote deployment and distributed fault tolerance were not tested. The runtime audit reports no known vulnerabilities; the full audit (including development dependencies) still reports 20 moderate findings in the Jest/ts-jest chain via sprintf-js, so the full audit is not zero. No license is declared in this repository.
