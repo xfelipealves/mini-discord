@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="en">
   <meta charset="utf-8" /><meta
     name="viewport"
     content="width=device-width,initial-scale=1"
-  /><title>Verificação de frontend · Mini Discord</title
+  /><title>Frontend checks · Mini Discord</title
   ><style>
     body {
       font: 16px system-ui;
@@ -27,20 +27,20 @@
       color: #ffb7b7;
     }
   </style>
-  <h1>Verificação de frontend</h1>
+  <h1>Frontend checks</h1>
   <p>
-    Testes puros de ordenação, isolamento e retry. Não criam canais ou
-    mensagens.
+    Pure ordering, isolation and retry checks. They do not create channels or
+    messages.
   </p>
   <ol id="results"></ol>
   <p id="summary" role="status"></p>
   <p>
-    Para repetir no terminal:
+    To repeat them in a terminal:
     <code>node --test tests/frontend/chat-core.test.mjs</code>
   </p>
   <p>
-    Os fluxos integrados de drawer, diálogos, envio, histórico e reconexão devem
-    ser verificados no navegador Orca do workspace.
+    Integrated drawer, dialog, send, history and reconnect flows must be
+    verified in a real browser against a running server.
   </p>
   <script type="module">
     import {
@@ -61,18 +61,18 @@
     const test = (name, check) => {
       const row = document.createElement("li");
       try {
-        if (!check()) throw Error("Resultado inesperado");
-        row.textContent = `Passou: ${name}`;
+        if (!check()) throw Error("Unexpected result");
+        row.textContent = `Passed: ${name}`;
         row.className = "pass";
         passed++;
       } catch (error) {
-        row.textContent = `Falhou: ${name}: ${error.message}`;
+        row.textContent = `Failed: ${name}: ${error.message}`;
         row.className = "fail";
         failed++;
       }
       results.append(row);
     };
-    test("Páginas anteriores são mescladas em ordem cronológica", () =>
+    test("Older pages merge in chronological order", () =>
       mergeMessages(
         [message("b", "02")],
         [message("c", "03"), message("a", "01")],
@@ -80,13 +80,13 @@
       )
         .map((item) => item.message_id)
         .join(",") === "a,b,c");
-    test("Mensagem repetida por SSE permanece única", () =>
+    test("A message repeated by SSE stays unique", () =>
       mergeMessages([message("a", "01")], [message("a", "01")], "general")
         .length === 1);
-    test("Eventos de outros canais são ignorados", () =>
+    test("Events from other channels are ignored", () =>
       mergeMessages([], [message("a", "01", "design")], "general").length ===
       0);
-    test("Retry preserva id, conteúdo e nome original", () => {
+    test("Retry keeps the original id, content and name", () => {
       const pending = {
         content: "Olá",
         user_id: "Antes",
@@ -96,10 +96,10 @@
         draftForSend({ text: "Olá", pending }, "Depois", "second") === pending
       );
     });
-    test("Busca encontra nome e conteúdo", () =>
+    test("Search matches name and content", () =>
       matchesSearch(message("a", "01"), "FELIPE") &&
       matchesSearch(message("a", "01"), "segunda"));
     document.getElementById("summary").textContent =
-      `${passed} passaram; ${failed} falharam.`;
+      `${passed} passed; ${failed} failed.`;
   </script>
 </html>

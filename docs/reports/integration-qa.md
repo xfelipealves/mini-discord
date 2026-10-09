@@ -1,5 +1,7 @@
 # Integration delivery — Mini Discord portfolio revival
 
+> **Historical record.** This report describes the local integration checkpoint of 2026-10-08. That work was later split into commits `1b6882d`, `b65031f` and `f1c5977` and merged into `main` through pull request #1 (`c4eb828`). Local ports, Orca terminals and page IDs below refer to that session only.
+
 Date: 2026-10-08. Task `task_2fa52383558d`, Dispatch `ctx_403570b07b9c`. Integrated both workers’ uncommitted backend/frontend work after reading their reports, source and diffs; no push, publication or remote merge.
 
 ## Result and review location

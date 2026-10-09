@@ -1,5 +1,7 @@
 # Frontend handoff — Mini Discord
 
+> **Historical record.** This is the frontend worker handoff written before integration. Counts and temporary paths reflect that moment; for example, the helper suite later grew from six to seven tests. See [TESTING.md](../../TESTING.md) and [the integration report](../../docs/reports/integration-qa.md) for current verification.
+
 Scope: only `public/**` and `tests/frontend/**`; no staging, commits or publishing.
 
 ## Exact files
