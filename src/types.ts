@@ -10,6 +10,7 @@ export interface PostMessageResponse {
   ok: true;
   message_id?: string;
   deduped?: boolean;
+  message?: Message;
 }
 
 export interface GetMessagesQuery {
@@ -25,6 +26,7 @@ export interface Message {
   user_id: string;
   content: string;
   created_at: string;
+  demo?: boolean;
 }
 
 export interface GetMessagesResponse {
@@ -44,7 +46,14 @@ export interface ErrorResponse {
   };
 }
 
+export interface Channel {
+  id: string;
+  name: string;
+  description: string;
+}
+
 export interface HealthResponse {
+  storage: "local" | "scylla";
   ok: true;
   dc: string;
   keyspace: string;
