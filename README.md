@@ -1,8 +1,14 @@
 # Mini Discord
 
+![Mini Discord — persistent realtime chat (conceptual cover illustration)](docs/images/readme-cover.png)
+
+<sub>Cover: AI-generated conceptual illustration, not a screenshot of the app. See [docs/images/README.md](docs/images/README.md) for provenance. The screenshots below are real captures.</sub>
+
 A portfolio chat app by Felipe Alves: channels, persistent conversations and realtime updates, built with TypeScript and a responsive interface written in Brazilian Portuguese. It runs immediately with local storage; the ScyllaDB mode preserves the project's original educational goal.
 
-![Real Mini Discord interface](docs/screenshots/desktop.png)
+![Real screenshot of the Mini Discord desktop interface](docs/screenshots/desktop.png)
+
+<sub>Real screenshot of the compiled app with its clean demo seed (desktop).</sub>
 
 ## Getting started
 
@@ -35,7 +41,7 @@ Authors listed in the context panel are profiles found in the history; they do n
 <details>
 <summary>Real mobile capture (390 × 844)</summary>
 
-![Mobile interface](docs/screenshots/mobile.png)
+![Real screenshot of the Mini Discord mobile interface](docs/screenshots/mobile.png)
 
 </details>
 
