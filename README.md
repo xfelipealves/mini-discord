@@ -135,6 +135,10 @@ npm audit --omit=dev
 
 `npm test` runs the backend tests and the frontend helper tests without any external database. [TESTING.md](TESTING.md) covers optional checks and manual QA; the [integration report](docs/reports/integration-qa.md) records the evidence for this delivery. GitHub Actions runs tests, build and the runtime audit on Node 20 and 22.
 
+## Related project
+
+[trabalho_socketio](https://github.com/xfelipealves/trabalho_socketio) is a small educational Socket.IO lab that explores the transport side of chat: users joining, sending messages to a main room and leaving. It is a companion study, not a second product; Mini Discord is the primary showcase and uses its own SSE-based realtime layer.
+
 ## Current limits
 
 This public demo accepts free-form names and messages from any visitor. There is no authentication, authorization, moderation, rate limiting, message editing/deletion or account recovery. Do not share private information.
