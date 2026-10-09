@@ -1,0 +1,17 @@
+$ env API_TEST_ALLOW_LOCAL=1 API_TEST_URL=http://localhost:4320 npm run test:integration
+
+> mini-discord-scylladb@1.0.0 test:integration
+> npm run test:scylla
+
+
+> mini-discord-scylladb@1.0.0 test:scylla
+> jest --runInBand --testPathPatterns=integration
+
+
+Test Suites: 2 passed, 2 total
+Tests:       4 passed, 4 total
+Snapshots:   0 total
+Time:        1.191 s
+Ran all test suites matching integration.
+
+Exit: 0

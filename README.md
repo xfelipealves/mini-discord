@@ -1,350 +1,144 @@
 # Mini Discord
 
-Mini Discord is a small educational chat application for exploring ScyllaDB data-modeling and consistency concepts. It is not a production-ready Discord replacement or a general-purpose chat service.
+Um chat de portfólio por Felipe Alves: canais, conversas persistentes e atualizações em tempo real, com TypeScript e uma interface responsiva em português. Funciona imediatamente com armazenamento local; o modo ScyllaDB preserva o objetivo educacional do projeto.
 
-The repository contains:
+![Interface real do Mini Discord](docs/screenshots/desktop.png)
 
-- A TypeScript/Express API backed by ScyllaDB through `cassandra-driver`.
-- A static HTML frontend that sends messages and loads channel history.
-- Docker Compose definitions for a single-node development database and a three-node local cluster.
-- Unit, API-backed integration, frontend, and shell-based concept tests.
+## Começar
 
-## What It Demonstrates
+Requer Node.js 20+ e npm. Após clonar e instalar com `npm ci`, um único comando inicia a interface e a API:
 
-- Channel-based partitioning with `channel_id` as the partition key.
-- TimeUUID clustering and newest-first message ordering.
-- `before` and `after` cursor queries for message history.
-- Configurable read and write consistency levels.
-- Lightweight transactions (LWT) with `client_msg_id` for duplicate prevention.
-- The difference between a local RF=1 schema and a three-node RF=3 schema.
+```sh
+npm run dev
+```
 
-These examples are intentionally small so the ScyllaDB behavior is visible in the schema, API, and test scripts.
+Abra **http://localhost:3000**. Não é necessário banco, servidor separado para o frontend ou arquivo `.env`. A primeira execução cria `data/chat.json` com quatro canais e sete mensagens marcadas como demonstrativas. As mensagens novas são reais e compartilhadas por todos que acessam esse servidor.
 
-## Architecture
+Se a porta estiver ocupada, escolha outra sem encerrar serviços existentes:
+
+```sh
+API_PORT=4318 npm run dev
+```
+
+## O que funciona
+
+- Criar e trocar canais, enviar com Enter e inserir linhas com Shift + Enter.
+- Histórico com páginas de 50 mensagens, apresentado do mais antigo para o mais recente.
+- Eventos SSE de canais e mensagens, reconexão automática e recuperação de mensagens perdidas, inclusive além de uma página.
+- Repetir um envio não confirmado com a mesma identidade, evitando duplicatas.
+- Nome de exibição e rascunhos por canal salvos no navegador.
+- Busca por texto ou autor **apenas nas mensagens carregadas**; carregar páginas anteriores amplia o alcance.
+- Drawer móvel, diálogos nativos, estados de erro/repetição, foco visível e conteúdo de usuário renderizado como texto.
+
+Os autores listados no contexto são perfis encontrados no histórico, sem indicar presença online. O nome de exibição é livre e não representa autenticação. Não há voz, anexos ou login.
+
+<details>
+<summary>Captura móvel real (390 × 844)</summary>
+
+![Interface móvel](docs/screenshots/mobile.png)
+
+</details>
+
+## Arquitetura
 
 ```text
-Browser
-  public/index.html
-  - Static HTML, CSS, and JavaScript
-  - Sends messages and loads channel history
-  - Calls http://localhost:3000
-           |
-           | HTTP/JSON with CORS
-           v
-Express API
-  src/index.ts
-  - Input validation and structured error responses
-  - Consistency selection
-  - Message and health endpoints
-           |
-           | CQL on port 9042
-           v
-ScyllaDB
-  - chat.messages
-  - chat.message_dedupe
-  - RF=1 with SimpleStrategy in development mode
-  - RF=3 with NetworkTopologyStrategy in cluster mode
+Navegador: HTML + CSS + módulos JavaScript
+  ├─ fetch da mesma origem → Express → validação → Storage
+  └─ EventSource /api/events ← eventos após persistência
+                                               ├─ LocalStorage: JSON no disco
+                                               └─ ScyllaStorage: CQL preparado + LWT
 ```
 
-The API does not serve the frontend. Run a separate static web server for `public/`. The browser client currently has the API URL hard-coded as `http://localhost:3000`.
+`src/index.ts` serve os assets de `public/` e a API no mesmo processo. `src/validators.ts` valida payloads, limites, cursores e consistência. `src/storage.ts` serializa alterações locais, grava um arquivo temporário com fsync e troca atômica, além de impedir dois escritores vivos no mesmo arquivo. `src/scylla-storage.ts` implementa o mesmo contrato usando o driver Cassandra. `public/chat-core.js` centraliza merge, ordenação TimeUUID, busca e identidade de retries; `public/app.js` coordena os fluxos da interface. `src/db.ts` mantém helpers CQL educacionais históricos; a API atual usa os adapters Storage.
 
-## Project Tree
+## Configuração e persistência
 
-```text
-.
-├── src/
-│   ├── db.ts                         ScyllaDB connection and queries
-│   ├── index.ts                      Express app and API routes
-│   ├── types.ts                      API TypeScript types
-│   └── validators.ts                 Request and consistency validation
-├── public/index.html                 Static browser client
-├── docker/
-│   ├── init-schema.cql               Development schema, RF=1
-│   ├── init-schema-cluster.cql       Cluster schema, RF=3
-│   └── init-schema-test.cql           Test keyspace schema, RF=1
-├── docker-compose.yml                Single-node ScyllaDB setup
-├── docker-compose.cluster.yml        Three-node ScyllaDB setup
-├── scripts/
-│   ├── run-tests.sh                  Unit/integration test runner
-│   ├── setup-test-db.sh              Creates the test schema
-│   └── test-scylla-concepts.sh       LWT, consistency, pagination, and other checks
-├── tests/                             Jest and browser tests
-├── .env.example                      Example runtime configuration
-├── jest.config.js                    Jest configuration
-├── package.json                      Commands and dependencies
-└── TESTING.md                        Additional testing notes
+A aplicação carrega `.env` automaticamente quando existir; `.env.example` contém as opções. Variáveis exportadas pelo processo têm prioridade.
+
+| Variável                    | Padrão             | Uso                                          |
+| --------------------------- | ------------------ | -------------------------------------------- |
+| `API_PORT`                  | `3000`             | Porta HTTP da interface/API                  |
+| `STORAGE_MODE`              | `local`            | `local` ou `scylla` explícito                |
+| `LOCAL_DATA_FILE`           | `./data/chat.json` | Caminho do JSON local                        |
+| `REQUEST_BODY_LIMIT`        | `32kb`             | Limite do corpo HTTP                         |
+| `SCYLLA_CONTACT_POINTS`     | `127.0.0.1`        | Hosts separados por vírgula                  |
+| `SCYLLA_DATACENTER`         | `datacenter1`      | Datacenter do driver                         |
+| `SCYLLA_KEYSPACE`           | `chat`             | Keyspace previamente inicializado            |
+| `DEFAULT_WRITE_CONSISTENCY` | `ONE`              | Consistência padrão de escrita               |
+| `DEFAULT_READ_CONSISTENCY`  | `ONE`              | Consistência padrão de leitura               |
+| `CORS_ORIGIN`               | ausente            | Origem extra opcional; desnecessária na demo |
+
+O JSON e os registros de retry sobrevivem a reloads e reinícios do servidor; nome e rascunhos dependem do localStorage daquele navegador/origem. Uma nova origem/porta tem seu próprio perfil. Não remova arquivos `.lock`/`.recovery` enquanto houver escritores: uma recuperação incerta falha de forma segura e requer inspeção. JSON inválido causa falha de startup, sem apagar dados silenciosamente.
+
+Para servir o build:
+
+```sh
+npm ci
+npm run build
+npm start
 ```
 
-## Prerequisites
+Execute a partir da raiz do projeto e distribua `dist/`, `public/`, `package.json`, lockfile e dependências de runtime. Para uma demo hospedada, configure `LOCAL_DATA_FILE` em volume persistente, rode **uma única instância**, e coloque TLS/reverse proxy à frente. O proxy deve permitir SSE duradouro, desabilitar buffering em `/api/events` e permitir reconexões. Encerrar com SIGINT/SIGTERM libera o lock. Não há Dockerfile novo; os arquivos Compose existentes fornecem apenas o laboratório Scylla.
 
-- Docker with Docker Compose support.
-- Node.js 20 or newer.
-- npm.
-- Python 3 if you want to serve the static frontend with the example command.
-- A modern browser.
+## Laboratório ScyllaDB
 
-The Compose files use ScyllaDB `5.2` images and allocate a deliberately small local development footprint. Adjust Docker resources if the containers cannot start on your machine.
+O modo local não simula replicação, quórum nem LWT. Para exercitar CQL de verdade, inicialize o serviço com Docker Compose:
 
-## Quick Start: Development Mode
-
-Development mode runs one ScyllaDB node with RF=1.
-
-### 1. Clone and install
-
-```bash
-git clone https://github.com/xfelipealves/mini-discord.git
-cd mini-discord
-cp .env.example .env
-npm install
-```
-
-### 2. Start ScyllaDB
-
-```bash
+```sh
 docker compose up -d
+# Aguarde o scylla saudável e scylla-init terminar sem erro.
 docker compose logs scylla-init
+STORAGE_MODE=scylla npm run dev
 ```
 
-Wait for `Schema initialized successfully` before starting the API. If your installation uses the legacy command, `docker-compose` can be used in place of `docker compose`.
+O schema `docker/init-schema.cql` cria o keyspace `chat` e `messages`. O adapter adiciona `channels` e `message_retries` e registra os canais padrão, sem popular mensagens demonstrativas. Dados locais não são migrados automaticamente. Em `docker-compose.cluster.yml`, os schemas usam NetworkTopologyStrategy/RF=3 para explorar replicação; confira os datacenters e contact points antes de conectar. Essas imagens/configurações são um laboratório histórico, não uma recomendação de operação em produção.
 
-### 3. Load configuration and start the API
+Conceitos preservados:
 
-The application reads environment variables from `process.env`. It does not call `dotenv.config()` at startup, so load `.env` into the shell explicitly:
+- **Partition key:** `PRIMARY KEY ((channel_id), message_id)` agrupa o histórico de um canal.
+- **Clustering:** `message_id timeuuid` com ordem DESC permite buscar mensagens recentes e páginas por cursor. A UI inverte a apresentação; campos de timestamp do TimeUUID resolvem empates no mesmo milissegundo.
+- **LWT:** `INSERT ... IF NOT EXISTS` em `message_retries` escolhe e salva o payload completo para `(channel_id, client_msg_id)`. Uma repetição pode completar uma escrita interrompida no mesmo primary key.
+- **Consistência:** ONE, TWO, THREE, QUORUM, ALL, LOCAL_ONE, LOCAL_QUORUM e ANY (somente escrita). Níveis explícitos inválidos retornam 400; configuração padrão inválida impede startup. O retry LWT usa LOCAL_QUORUM/LOCAL_SERIAL independentemente da consistência da inserção de mensagem.
+- **RF e datacenter:** SimpleStrategy/RF=1 no laboratório simples; NetworkTopologyStrategy/RF=3 nos exemplos de cluster. Quórum não é uma promessa de desempenho, e um teste com JSON não comprova comportamento distribuído.
 
-```bash
-set -a
-. ./.env
-set +a
-npm run dev
+`message_dedupe` nos schemas antigos pertence aos helpers educacionais; a API usa `message_retries` com payload recuperável. Não foi executado teste com ScyllaDB vivo nesta entrega.
+
+## API básica
+
+Todas as respostas JSON usam `ok`; erros têm `error: { code, message }` e status HTTP apropriado.
+
+| Método e rota                    | Contrato                                                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `GET /health`                    | Modo de storage, datacenter e keyspace; não autentica usuários                                                      |
+| `GET /api/channels`              | `{ ok, items }`                                                                                                     |
+| `POST /api/channels`             | `{ name, description? }` → 201 `{ ok, channel }`; slug repetido → 409                                               |
+| `POST /api/messages`             | `{ channel_id, user_id, content, client_msg_id?, consistency? }` → `{ ok, message_id, message, deduped }`           |
+| `GET /api/channels/:id/messages` | `limit=1..100` (50 padrão), `before` **ou** `after` TimeUUID v1, `consistency?`; `{ items, page: { next_before } }` |
+| `GET /api/events`                | SSE nomeado: `connected`, `channel`, `message`; comentários heartbeat                                               |
+
+Histórico da API é DESC e `next_before` é null ao esgotar. Crie o canal antes de enviar; canal desconhecido retorna 404. Nome de canal: 1–60 caracteres e slug ASCII válido; descrição: até 240. Mensagem: 1–2000 caracteres não vazios; autor e retry ID: até 100. O formulário usa até 50 para nome de exibição. Repetir a mesma chave no mesmo canal devolve a mensagem original; mudar autor/conteúdo com a mesma chave retorna 409. Sem chave de retry, cada POST cria uma nova mensagem.
+
+```sh
+curl http://localhost:3000/api/channels
+curl -X POST http://localhost:3000/api/messages \
+  -H 'Content-Type: application/json' \
+  -d '{"channel_id":"general","user_id":"Visitante","content":"Olá!","client_msg_id":"example-1"}'
 ```
 
-The API listens on `http://localhost:3000` by default.
+## Validação
 
-### 4. Serve the frontend
-
-In a second terminal:
-
-```bash
-python3 -m http.server 8080 --directory public
-```
-
-Open <http://localhost:8080>, choose a channel and user, send a message, and use **Load Latest** or **Load Older** to inspect the results.
-
-To stop the development database:
-
-```bash
-docker compose down
-```
-
-## Cluster Mode
-
-Cluster mode starts three local ScyllaDB nodes and initializes `chat` with RF=3 using `NetworkTopologyStrategy` for `datacenter1`.
-
-Stop development mode first, then start the cluster:
-
-```bash
-docker compose down
-docker compose -f docker-compose.cluster.yml up -d
-docker compose -f docker-compose.cluster.yml logs scylla-cluster-init
-```
-
-Wait for `Cluster schema initialized successfully`. The first node is available at `127.0.0.1:9042`; the other nodes are mapped to host ports `9043` and `9044`. The default `.env.example` contact point (`127.0.0.1`) connects the API through the first node.
-
-Load the environment and start the API as in development mode:
-
-```bash
-set -a
-. ./.env
-set +a
-npm run dev
-```
-
-Use cluster mode when experimenting with RF=3 and consistency behavior. The Compose setup is for local learning; it is not a production cluster configuration.
-
-To stop the cluster:
-
-```bash
-docker compose -f docker-compose.cluster.yml down
-```
-
-## API Summary
-
-### `POST /api/messages`
-
-Creates a message. Required fields are `channel_id`, `user_id`, and `content`.
-
-```json
-{
-  "channel_id": "general",
-  "user_id": "alice",
-  "content": "Hello",
-  "consistency": "ONE",
-  "client_msg_id": "optional-dedup-key"
-}
-```
-
-Validation limits are 1-100 characters for `channel_id` and `user_id`, 1-2000 characters for `content`, and 1-100 characters for `client_msg_id`.
-
-A successful new message returns:
-
-```json
-{
-  "ok": true,
-  "message_id": "timeuuid"
-}
-```
-
-Reusing the same `client_msg_id` within a channel returns `deduped: true` instead of inserting another message.
-
-### `GET /api/channels/:channel_id/messages`
-
-Returns messages for one channel, newest first.
-
-Query parameters:
-
-- `limit`: 1-100, default `20`.
-- `before`: Return messages older than this TimeUUID.
-- `after`: Return messages newer than this TimeUUID.
-- `consistency`: Override the read consistency level.
-
-`before` and `after` cannot be used together. The response includes `page.next_before` for older-page navigation.
-
-### `GET /health`
-
-Returns the configured datacenter and keyspace after the API has connected to ScyllaDB:
-
-```json
-{
-  "ok": true,
-  "dc": "datacenter1",
-  "keyspace": "chat"
-}
-```
-
-Invalid requests return structured errors with HTTP 400 by default. `USE_SOFT_ERRORS=true` changes handled error responses to HTTP 200, while retaining `ok: false` in the response body.
-
-## ScyllaDB Schema
-
-The application uses the `chat` keyspace in both runtime modes:
-
-```sql
-CREATE TABLE messages (
-    channel_id text,
-    message_id timeuuid,
-    user_id text,
-    content text,
-    created_at timestamp,
-    PRIMARY KEY ((channel_id), message_id)
-) WITH CLUSTERING ORDER BY (message_id DESC);
-
-CREATE TABLE message_dedupe (
-    channel_id text,
-    client_msg_id text,
-    PRIMARY KEY ((channel_id), client_msg_id)
-);
-```
-
-`messages` keeps each channel in its own partition and orders rows by descending `message_id`. `message_dedupe` is written with `IF NOT EXISTS`, which is the LWT used by the API for idempotency.
-
-## Configuration
-
-Start from the tracked example file:
-
-```bash
-cp .env.example .env
-```
-
-Because the application does not load `.env` itself, export it before `npm run dev`:
-
-```bash
-set -a
-. ./.env
-set +a
-```
-
-Available variables in `.env.example`:
-
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `SCYLLA_CONTACT_POINTS` | `127.0.0.1` | Comma-separated ScyllaDB contact points. |
-| `SCYLLA_DATACENTER` | `datacenter1` | Local datacenter name used by the driver. |
-| `SCYLLA_KEYSPACE` | `chat` | Keyspace used by the API. |
-| `API_PORT` | `3000` | HTTP port for the API. |
-| `DEFAULT_WRITE_CONSISTENCY` | `ONE` | Default write consistency. |
-| `DEFAULT_READ_CONSISTENCY` | `ONE` | Default read consistency. |
-| `REQUEST_BODY_LIMIT` | `1mb` | Express JSON body limit. |
-| `CORS_ORIGIN` | `*` | Allowed CORS origin; permissive by default for local development. |
-| `USE_SOFT_ERRORS` | `false` | Return HTTP 200 for handled errors when set to `true`. |
-
-Supported consistency names are `ANY`, `ONE`, `TWO`, `THREE`, `QUORUM`, `ALL`, `LOCAL_ONE`, and `LOCAL_QUORUM`.
-
-## Tests
-
-Install dependencies before running tests:
-
-```bash
-npm install
-```
-
-Unit tests do not require a running API:
-
-```bash
-npm test -- tests/unit/
-```
-
-Integration tests call `http://localhost:3000` and require ScyllaDB, the schema, and the API to be running:
-
-```bash
-docker compose up -d
-set -a; . ./.env; set +a
-npm run dev
-```
-
-In another terminal:
-
-```bash
-npm test -- tests/integration/
-```
-
-The integration tests write sample data to the API's configured keyspace. Use a disposable local database when running them.
-
-The repository also provides:
-
-```bash
-# Run all Jest tests; integration tests need the API running.
+```sh
 npm test
-
-# Run the helper, which falls back to unit tests if the API is unavailable.
-./scripts/run-tests.sh
-
-# Run all ScyllaDB concept checks.
-./scripts/test-scylla-concepts.sh
-
-# Run one concept check.
-./scripts/test-scylla-concepts.sh lwt
+npm run build
+npm audit --omit=dev
 ```
 
-Available concept arguments are `all`, `lwt`, `consistency`, `pagination`, `partitioning`, and `performance`. For the manual frontend checks, open `tests/frontend/frontend-tests.html` in a browser.
+`npm test` executa os testes backend e os helpers frontend sem banco externo. [TESTING.md](TESTING.md) detalha checks opcionais e QA manual; [relatório de integração](docs/reports/integration-qa.md) registra a evidência desta entrega. GitHub Actions executa testes/build/audit de runtime em Node 20 e 22.
 
-## Limitations and Security
+## Limites atuais
 
-- There is no authentication or authorization. Anyone who can reach the API can read and write messages.
-- The default CORS policy is `*`; restrict `CORS_ORIGIN` before exposing the API beyond local development.
-- The frontend is a static local client and hard-codes `http://localhost:3000`.
-- There are no WebSockets, subscriptions, or push notifications; refreshes are request-based.
-- There are no metrics or tracing, and logging is basic request/error output.
-- The API runs as one process and has no production deployment, load balancing, or operational configuration.
-- The deduplication table has no retention or cleanup policy.
-- The Docker cluster files are educational local fixtures, not a hardened ScyllaDB deployment. Do not expose them to untrusted networks.
+Esta demo pública aceita nomes livres e mensagens de qualquer visitante. Não há autenticação, autorização, moderação, rate limiting, remoção/edição de mensagens ou recuperação de conta. Não compartilhe informações privadas.
 
-Do not use this project in production without adding authentication, authorization, input and abuse controls, secure CORS and network policies, TLS, secrets management, monitoring, backups, data-retention policies, and a deployment design appropriate for the workload.
+O JSON regrava todo o conjunto, mantém histórico/retries indefinidamente e serve um processo pequeno. SSE é local ao processo: não há broker entre instâncias, buffer de replay ou garantia de entrega; o navegador reconcilia pelo histórico. Um retry Scylla que conclui uma inserção interrompida pode retornar `deduped: true` sem novo evento SSE; clientes precisam reconciliar histórico. Na reconexão sem histórico conhecido, a recuperação pode carregar todas as páginas disponíveis. Busca permanece restrita às mensagens carregadas, sem índice global.
 
-## Contribution and License Status
-
-There is no `CONTRIBUTING.md` in the repository, so there is no repository-specific contribution process to follow.
-
-There is no `LICENSE` file. The project should not be assumed to be MIT-licensed; confirm licensing with the repository owner before redistributing or using it outside personal learning.
-
-## Educational Scope
-
-This repository is intended for learning and local experimentation with ScyllaDB concepts. The examples show how a small API maps channel history, TimeUUID ordering, LWT deduplication, and consistency settings onto CQL. They do not establish production performance, availability, security, or fault-tolerance guarantees.
+Capturas móveis usam viewport emulado, sem comprovar teclado físico de telefone ou leitor de tela. Não foram testados cluster Scylla vivo, deploy remoto ou tolerância a falhas distribuídas. O audit de runtime está sem vulnerabilidades conhecidas; o audit completo ainda registra 20 achados moderados na cadeia Jest/ts-jest via sprintf-js. Não existe licença declarada neste repositório.

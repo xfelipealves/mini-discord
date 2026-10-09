@@ -1,235 +1,284 @@
-import express from 'express';
-import cors from 'cors';
-import { types } from 'cassandra-driver';
-import { 
-  initializeDatabase, 
-  closeDatabase, 
-  prepareStatements,
-  insertMessage,
-  checkDedupe,
-  getMessages,
-  nowId,
-  toTimestamp
-} from './db';
-import { validateConsistency, validatePostMessage, validateGetMessages } from './validators';
-import { 
-  PostMessageRequest, 
-  PostMessageResponse, 
-  GetMessagesQuery,
-  GetMessagesResponse,
-  ErrorResponse,
-  HealthResponse,
-  ApiResponse,
-  Message
-} from './types';
-
-const app = express();
-const PORT = process.env.API_PORT || 3000;
-const BODY_LIMIT = process.env.REQUEST_BODY_LIMIT || '1mb';
-const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
-const USE_SOFT_ERRORS = process.env.USE_SOFT_ERRORS === 'true';
-
-let dbInfo: { dc: string; keyspace: string };
-
-// Middleware
-app.use(cors({ origin: CORS_ORIGIN }));
-app.use(express.json({ limit: BODY_LIMIT }));
-
-// Request logging
-app.use((req, res, next) => {
-  console.log(`${req.method} ${req.path} - ${new Date().toISOString()}`);
-  next();
-});
-
-// Error response helper
-function errorResponse(code: string, message: string, details?: any): ErrorResponse {
-  return {
-    ok: false,
-    error: { code, message, details }
-  };
+import "dotenv/config";
+import express from "express";
+import cors from "cors";
+import path from "node:path";
+import http from "node:http";
+import { LocalStorage, HttpError, Storage } from "./storage";
+import { ScyllaStorage } from "./scylla-storage";
+import {
+  validateChannel,
+  validatePostMessage,
+  validateGetMessages,
+  validateConsistency,
+} from "./validators";
+export interface AppOptions {
+  storage?: string;
+  file?: string;
+  seed?: boolean;
+  publicDir?: string;
 }
-
-// Health endpoint
-app.get('/health', (req, res) => {
-  if (!dbInfo) {
-    const error = errorResponse('SERVICE_UNAVAILABLE', 'Database not initialized');
-    return res.status(503).json(error);
+export async function createApplication(options: AppOptions = {}) {
+  const mode = options.storage ?? process.env.STORAGE_MODE ?? "local";
+  if (!["local", "scylla"].includes(mode))
+    throw new Error("STORAGE_MODE must be local or scylla");
+  for (const setting of [
+    "DEFAULT_WRITE_CONSISTENCY",
+    "DEFAULT_READ_CONSISTENCY",
+  ]) {
+    const value = process.env[setting];
+    if (
+      value !== undefined &&
+      (validateConsistency(value).warning ||
+        (setting === "DEFAULT_READ_CONSISTENCY" &&
+          value.trim().toUpperCase() === "ANY"))
+    ) {
+      throw new Error(`Invalid consistency configuration: ${setting}`);
+    }
   }
-  
-  const response: HealthResponse = {
-    ok: true,
-    dc: dbInfo.dc,
-    keyspace: dbInfo.keyspace
+  const storage: Storage =
+    mode === "local"
+      ? await LocalStorage.create(
+          options.file ??
+            process.env.LOCAL_DATA_FILE ??
+            path.resolve("data/chat.json"),
+          options.seed,
+        )
+      : await ScyllaStorage.create();
+  const app = express();
+  const streams = new Set<express.Response>();
+  app.disable("x-powered-by");
+  if (process.env.CORS_ORIGIN)
+    app.use(cors({ origin: process.env.CORS_ORIGIN }));
+  app.use(express.json({ limit: process.env.REQUEST_BODY_LIMIT ?? "32kb" }));
+  const route =
+    (
+      fn: (req: express.Request, res: express.Response) => Promise<unknown>,
+    ): express.RequestHandler =>
+    (req, res, next) => {
+      Promise.resolve(fn(req, res)).catch(next);
+    };
+  const invalid = (errors: string[]) => {
+    throw new HttpError(400, "BAD_REQUEST", errors.join("; "));
   };
-  
-  res.json(response);
-});
-
-// Post message endpoint
-app.post('/api/messages', async (req, res) => {
-  try {
-    // Validate input
-    const validation = validatePostMessage(req.body);
-    if (!validation.valid) {
-      const error = errorResponse('BAD_REQUEST', 'Invalid input', { errors: validation.errors });
-      return res.status(USE_SOFT_ERRORS ? 200 : 400).json(error);
-    }
-    
-    const { channel_id, user_id, content, consistency, client_msg_id } = validation.data!;
-    
-    // Validate consistency
-    const consistencyResult = validateConsistency(consistency);
-    const writeConsistency = consistencyResult.value;
-    
-    // Check for deduplication if client_msg_id is provided
-    if (client_msg_id) {
-      const isUnique = await checkDedupe(channel_id, client_msg_id, writeConsistency);
-      
-      if (!isUnique) {
-        const response: PostMessageResponse = {
-          ok: true,
-          deduped: true
-        };
-        return res.json(response);
+  const emit = (name: string, data: unknown) => {
+    const event = `event: ${name}\ndata: ${JSON.stringify(data)}\n\n`;
+    for (const res of streams) {
+      if (!res.write(event)) {
+        streams.delete(res);
+        res.end();
       }
     }
-    
-    // Generate message ID and timestamp
-    const messageId = nowId();
-    const createdAt = toTimestamp(messageId);
-    
-    // Insert message
-    await insertMessage(channel_id, messageId, user_id, content, createdAt, writeConsistency);
-    
-    const response: PostMessageResponse = {
-      ok: true,
-      message_id: messageId.toString()
-    };
-    
-    if (consistencyResult.warning) {
-      (response as any).warning = consistencyResult.warning;
-    }
-    
-    res.json(response);
-    
-  } catch (error) {
-    console.error('Error posting message:', error);
-    const errorResp = errorResponse('INTERNAL', 'Failed to post message');
-    res.status(USE_SOFT_ERRORS ? 200 : 500).json(errorResp);
-  }
-});
-
-// Get messages endpoint
-app.get('/api/channels/:channel_id/messages', async (req, res) => {
-  try {
-    const channelId = req.params.channel_id;
-    
-    if (!channelId || channelId.length < 1 || channelId.length > 100) {
-      const error = errorResponse('BAD_REQUEST', 'Invalid channel_id');
-      return res.status(USE_SOFT_ERRORS ? 200 : 400).json(error);
-    }
-    
-    // Validate query parameters
-    const validation = validateGetMessages(req.query);
-    if (!validation.valid) {
-      const error = errorResponse('BAD_REQUEST', 'Invalid query parameters', { errors: validation.errors });
-      return res.status(USE_SOFT_ERRORS ? 200 : 400).json(error);
-    }
-    
-    const { limit, before, after, consistency } = validation.data!;
-    
-    // Validate consistency for read
-    const consistencyResult = validateConsistency(consistency || process.env.DEFAULT_READ_CONSISTENCY);
-    const readConsistency = consistencyResult.value;
-    
-    // Get messages
-    const rows = await getMessages(channelId, limit, before, after, readConsistency);
-    
-    // Format response
-    const items: Message[] = rows.map(row => ({
-      channel_id: row.channel_id,
-      message_id: row.message_id.toString(),
-      user_id: row.user_id,
-      content: row.content,
-      created_at: row.created_at.toISOString()
-    }));
-    
-    // Calculate next_before cursor
-    const nextBefore = items.length > 0 ? items[items.length - 1].message_id : null;
-    
-    const response: GetMessagesResponse = {
-      ok: true,
-      items,
-      page: {
-        next_before: nextBefore
-      }
-    };
-    
-    if (consistencyResult.warning) {
-      (response as any).warning = consistencyResult.warning;
-    }
-    
-    res.json(response);
-    
-  } catch (error) {
-    console.error('Error getting messages:', error);
-    const errorResp = errorResponse('INTERNAL', 'Failed to get messages');
-    res.status(USE_SOFT_ERRORS ? 200 : 500).json(errorResp);
-  }
-});
-
-// 404 handler
-app.use((req, res) => {
-  const error = errorResponse('NOT_FOUND', 'Endpoint not found');
-  res.status(USE_SOFT_ERRORS ? 200 : 404).json(error);
-});
-
-// Global error handler
-app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
-  const error = errorResponse('INTERNAL', 'Internal server error');
-  res.status(USE_SOFT_ERRORS ? 200 : 500).json(error);
-});
-
-// Graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('\nShutting down gracefully...');
-  await closeDatabase();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('\nShutting down gracefully...');
-  await closeDatabase();
-  process.exit(0);
-});
-
-// Export app for testing
-export { app };
-
-// Start server
-async function start() {
-  try {
-    // Initialize database
-    dbInfo = await initializeDatabase();
-    
-    // Prepare statements
-    await prepareStatements();
-    
-    // Start HTTP server
-    app.listen(PORT, () => {
-      console.log(`API server running on port ${PORT}`);
-      console.log(`CORS origin: ${CORS_ORIGIN}`);
-      console.log(`Soft errors mode: ${USE_SOFT_ERRORS}`);
+  };
+  app.get("/health", (_req, res) => res.json({ ok: true, ...storage.info }));
+  app.get(
+    "/api/channels",
+    route(async (_req, res) =>
+      res.json({ ok: true, items: await storage.channels() }),
+    ),
+  );
+  app.post(
+    "/api/channels",
+    route(async (req, res) => {
+      const v = validateChannel(req.body);
+      if (!v.valid) invalid(v.errors);
+      const channel = await storage.createChannel(
+        v.data!.name,
+        v.data!.description,
+      );
+      emit("channel", channel);
+      res.status(201).json({ ok: true, channel });
+    }),
+  );
+  app.post(
+    "/api/messages",
+    route(async (req, res) => {
+      const v = validatePostMessage(req.body);
+      if (!v.valid) invalid(v.errors);
+      const consistency = validateConsistency(v.data!.consistency);
+      const result = await storage.post(v.data!, consistency.value);
+      if (!result.deduped) emit("message", result.message);
+      res.json({
+        ok: true,
+        message_id: result.message.message_id,
+        ...result,
+        ...(consistency.warning ? { warning: consistency.warning } : {}),
+      });
+    }),
+  );
+  app.get(
+    "/api/channels/:channel_id/messages",
+    route(async (req, res) => {
+      const id = req.params.channel_id;
+      if (!id.trim() || id.length > 100) invalid(["Invalid channel_id"]);
+      const v = validateGetMessages(req.query);
+      if (!v.valid) invalid(v.errors);
+      const query = v.data!;
+      if (query.consistency === "ANY")
+        invalid(["ANY is a write-only consistency"]);
+      if (!(await storage.hasChannel(id)))
+        throw new HttpError(404, "CHANNEL_NOT_FOUND", "Channel not found");
+      const level = validateConsistency(
+        query.consistency ?? process.env.DEFAULT_READ_CONSISTENCY ?? "ONE",
+      );
+      const rows = await storage.history(
+        id,
+        query.limit + 1,
+        query.before,
+        query.after,
+        level.value,
+      );
+      const items = rows.slice(0, query.limit);
+      res.json({
+        ok: true,
+        items,
+        page: {
+          next_before:
+            rows.length > query.limit
+              ? items[items.length - 1].message_id
+              : null,
+        },
+        ...(level.warning ? { warning: level.warning } : {}),
+      });
+    }),
+  );
+  app.get("/api/events", (req, res) => {
+    res.status(200).set({
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache, no-transform",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
     });
-    
-  } catch (error) {
-    console.error('Failed to start server:', error);
-    process.exit(1);
+    res.flushHeaders();
+    res.write('event: connected\ndata: {"ok":true}\n\n');
+    streams.add(res);
+    req.on("close", () => streams.delete(res));
+  });
+  const heartbeat = setInterval(() => {
+    for (const res of streams) {
+      if (!res.write(": heartbeat\n\n")) {
+        streams.delete(res);
+        res.end();
+      }
+    }
+  }, 25000);
+  heartbeat.unref();
+  app.use(
+    express.static(options.publicDir ?? path.resolve(__dirname, "../public")),
+  );
+  app.use((_req, res) =>
+    res.status(404).json({
+      ok: false,
+      error: { code: "NOT_FOUND", message: "Endpoint not found" },
+    }),
+  );
+  app.use(
+    (
+      error: any,
+      _req: express.Request,
+      res: express.Response,
+      _next: express.NextFunction,
+    ) => {
+      const status =
+        error instanceof HttpError
+          ? error.status
+          : error.type === "entity.too.large"
+            ? 413
+            : error.type === "entity.parse.failed"
+              ? 400
+              : 500;
+      const code =
+        error instanceof HttpError
+          ? error.code
+          : status === 413
+            ? "PAYLOAD_TOO_LARGE"
+            : status === 400
+              ? "BAD_REQUEST"
+              : "INTERNAL";
+      if (status === 500) console.error("Request failed:", error.message);
+      res.status(status).json({
+        ok: false,
+        error: {
+          code,
+          message:
+            status === 500
+              ? "Internal server error"
+              : error instanceof HttpError
+                ? error.message
+                : status === 413
+                  ? "Request body too large"
+                  : "Invalid JSON body",
+        },
+      });
+    },
+  );
+  let closed = false;
+  return {
+    app,
+    storage,
+    close: async () => {
+      if (closed) return;
+      closed = true;
+      clearInterval(heartbeat);
+      for (const res of streams) res.end();
+      streams.clear();
+      await storage.close();
+    },
+  };
+}
+export async function start() {
+  const runtime = await createApplication();
+  const port = Number(process.env.API_PORT ?? 3000);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    await runtime.close();
+    throw new Error("Invalid API_PORT");
   }
+  const server = http.createServer(runtime.app);
+  try {
+    await new Promise<void>((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(port, () => {
+        server.off("error", reject);
+        resolve();
+      });
+    });
+  } catch (error) {
+    await runtime.close();
+    throw error;
+  }
+  console.log(
+    `Mini Discord: http://localhost:${(server.address() as any).port} (${runtime.storage.info.storage})`,
+  );
+  let stopping = false;
+  const shutdown = async () => {
+    if (stopping) return;
+    stopping = true;
+    const timeout = setTimeout(() => server.closeAllConnections(), 5000);
+    timeout.unref();
+    await Promise.all([
+      runtime.close(),
+      new Promise<void>((resolve) => server.close(() => resolve())),
+    ]);
+    clearTimeout(timeout);
+  };
+  const signal = () => {
+    shutdown().catch((error) => {
+      console.error(error);
+      process.exitCode = 1;
+    });
+  };
+  process.on("SIGINT", signal);
+  process.on("SIGTERM", signal);
+  return {
+    server,
+    close: async () => {
+      process.off("SIGINT", signal);
+      process.off("SIGTERM", signal);
+      await shutdown();
+    },
+  };
 }
-
-// Only start server if this file is run directly (not imported for testing)
-if (require.main === module) {
-  start();
-}
+if (require.main === module)
+  start().catch((error) => {
+    console.error("Startup failed:", error.message);
+    process.exitCode = 1;
+  });
