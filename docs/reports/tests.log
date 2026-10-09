@@ -1,0 +1,36 @@
+$ npm test
+
+> mini-discord-scylladb@1.0.0 test
+> npm run test:unit && npm run test:frontend
+
+
+> mini-discord-scylladb@1.0.0 test:unit
+> jest --runInBand
+
+
+Test Suites: 3 passed, 3 total
+Tests:       48 passed, 48 total
+Snapshots:   0 total
+Time:        1.398 s, estimated 2 s
+Ran all test suites.
+
+> mini-discord-scylladb@1.0.0 test:frontend
+> node --test tests/frontend/chat-core.test.mjs
+
+✔ Older pagination and live delivery produce chronological unique messages (2.377875ms)
+✔ Stale channel events and malformed messages cannot enter a conversation (0.072875ms)
+✔ Retry keeps exact content, identity and idempotency key after ambiguous failure (0.076417ms)
+✔ Editing a failed message creates a new key rather than reusing an old payload (0.065708ms)
+✔ Loaded-message search includes author and text, ignoring case (0.114666ms)
+✔ Changing profile name does not change an ambiguous retry identity (0.047625ms)
+✔ TimeUUID rollover within one millisecond preserves server chronology (7.973208ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 62.808667
+
+Exit: 0

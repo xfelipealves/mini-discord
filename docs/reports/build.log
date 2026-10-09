@@ -1,0 +1,7 @@
+$ npm run build
+
+> mini-discord-scylladb@1.0.0 build
+> tsc
+
+
+Exit: 0
